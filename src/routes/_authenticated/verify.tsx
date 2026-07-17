@@ -14,7 +14,11 @@ import { supabase, db } from "@/lib/db";
 import { useSession } from "@/lib/auth/session";
 import { analyzeContent } from "@/lib/ai/analyze";
 
-const search = z.object({ tab: z.enum(["url", "text", "image"]).optional() });
+const search = z.object({
+  tab: z.enum(["url", "text", "image", "scan"]).optional(),
+  source: z.enum(["clipboard", "share", "overlay", "camera", "gallery"]).optional(),
+  prefill: z.string().optional(),
+});
 
 export const Route = createFileRoute("/_authenticated/verify")({
   validateSearch: (s) => search.parse(s),
@@ -23,8 +27,12 @@ export const Route = createFileRoute("/_authenticated/verify")({
 });
 
 function VerifyPage() {
-  const { tab } = Route.useSearch();
-  const [current, setCurrent] = useState<"url" | "text" | "image">(tab ?? "url");
+  const { tab, prefill } = Route.useSearch();
+  // "scan" (built in a later task) and any non-url/text/image value fall back to "url".
+  const initialTab = tab === "text" || tab === "image" ? tab : "url";
+  const [current, setCurrent] = useState<"url" | "text" | "image">(initialTab);
+  const urlPrefill = initialTab === "url" ? prefill : undefined;
+  const textPrefill = initialTab === "text" ? prefill : undefined;
   const { profile, refresh } = useSession();
   const [consent, setConsent] = useState(Boolean(profile?.ai_consent));
 
@@ -82,10 +90,20 @@ function VerifyPage() {
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="url">
-                <UrlForm consent={consent} setConsent={setConsent} onConsented={refresh} />
+                <UrlForm
+                  consent={consent}
+                  setConsent={setConsent}
+                  onConsented={refresh}
+                  initialValue={urlPrefill}
+                />
               </TabsContent>
               <TabsContent value="text">
-                <TextForm consent={consent} setConsent={setConsent} onConsented={refresh} />
+                <TextForm
+                  consent={consent}
+                  setConsent={setConsent}
+                  onConsented={refresh}
+                  initialValue={textPrefill}
+                />
               </TabsContent>
               <TabsContent value="image">
                 <ImageForm consent={consent} setConsent={setConsent} onConsented={refresh} />
@@ -110,6 +128,7 @@ interface FormProps {
   consent: boolean;
   setConsent: (b: boolean) => void;
   onConsented: () => void | Promise<void>;
+  initialValue?: string;
 }
 
 function ConsentRow({
@@ -271,11 +290,11 @@ async function submitAndRedirect(
   await navigate({ to: "/verify/$id", params: { id: req.id }, replace: true });
 }
 
-function UrlForm({ consent, setConsent, onConsented }: FormProps) {
+function UrlForm({ consent, setConsent, onConsented, initialValue }: FormProps) {
   const { user } = useSession();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [url, setUrl] = useState("");
+  const [url, setUrl] = useState(initialValue ?? "");
   const [needConsent, setNeedConsent] = useState(false);
 
   return (
@@ -347,11 +366,11 @@ function UrlForm({ consent, setConsent, onConsented }: FormProps) {
   );
 }
 
-function TextForm({ consent, setConsent, onConsented }: FormProps) {
+function TextForm({ consent, setConsent, onConsented, initialValue }: FormProps) {
   const { user } = useSession();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialValue ?? "");
   const [needConsent, setNeedConsent] = useState(false);
   const max = 5000;
 
