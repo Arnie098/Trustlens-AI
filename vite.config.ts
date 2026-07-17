@@ -25,7 +25,11 @@ function localApiPlugin(): Plugin {
         try {
           if (urlPath === "/api/analyze" || urlPath.startsWith("/api/analyze/")) {
             const request = await nodeToFetchRequest(req);
-            const { handleAnalyzeApi } = await import("./src/lib/ai/analyze-handler");
+            // ssrLoadModule (not a literal import()) so esbuild doesn't bundle this
+            // chain into the config file — it would hoist node:sqlite to config load.
+            const { handleAnalyzeApi } = (await server.ssrLoadModule(
+              "/src/lib/ai/analyze-handler",
+            )) as typeof import("./src/lib/ai/analyze-handler");
             const response = await handleAnalyzeApi(request);
             await writeFetchResponse(res, response);
             return;
@@ -44,7 +48,9 @@ function localApiPlugin(): Plugin {
           }
 
           const request = await nodeToFetchRequest(req);
-          const { handleLocalApi } = await import("./src/lib/sqlite/api-handler");
+          const { handleLocalApi } = (await server.ssrLoadModule(
+            "/src/lib/sqlite/api-handler",
+          )) as typeof import("./src/lib/sqlite/api-handler");
           const response = await handleLocalApi(request);
           await writeFetchResponse(res, response);
         } catch (err) {
