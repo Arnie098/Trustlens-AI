@@ -12,15 +12,20 @@ export const Route = createFileRoute("/_authenticated/trust-replay/$id")({
 
 function TrustReplay() {
   const { id } = Route.useParams();
-  const { data } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["replay", id],
     queryFn: async () => {
-      const { data } = await db.from("verification_results").select("*").eq("id", id).maybeSingle();
+      const { data, error } = await db
+        .from("verification_results")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+      if (error) throw error;
       return data;
     },
   });
 
-  if (!data) {
+  if (isLoading) {
     return (
       <main className="mx-auto grid min-h-[50vh] max-w-4xl place-items-center px-4">
         <div className="prism-sheen relative text-center">
@@ -31,6 +36,46 @@ function TrustReplay() {
       </main>
     );
   }
+
+  if (isError) {
+    return (
+      <main className="mx-auto grid min-h-[50vh] max-w-4xl place-items-center px-4">
+        <div className="max-w-md text-center">
+          <p className="font-medium text-foreground">Could not load TrustReplay.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {(error as Error)?.message || "Something went wrong."}
+          </p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <Button variant="secondary" onClick={() => refetch()}>
+              Retry
+            </Button>
+            <Link to="/dashboard">
+              <Button variant="outline">Dashboard</Button>
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (!data) {
+    return (
+      <main className="mx-auto grid min-h-[50vh] max-w-4xl place-items-center px-4">
+        <div className="max-w-md text-center">
+          <p className="font-medium text-foreground">Replay not found</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            This verification result may have been deleted or the link is invalid.
+          </p>
+          <Link to="/dashboard" className="mt-4 inline-block">
+            <Button variant="outline" className="rounded-full">
+              Back to dashboard
+            </Button>
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   const nodes: ReplayNode[] = (data.replay_data as ReplayNode[]) ?? [];
   const totalReach = nodes.reduce((s, n) => s + n.reach, 0);
 
@@ -67,45 +112,56 @@ function TrustReplay() {
         <div className="prism-layer" aria-hidden="true" />
         <div className="glass rounded-2xl p-6 shadow-glow">
           <div className="text-lg font-semibold tracking-tight">Timeline & source graph</div>
-          <div className="relative mt-5">
-            <div
-              className="absolute inset-y-0 left-4 w-px bg-gradient-to-b from-teal/60 via-border to-transparent"
-              aria-hidden
-            />
-            <ol className="space-y-4">
-              {nodes.map((n) => (
-                <li key={n.id} className="relative pl-12">
-                  <div
-                    className={`absolute left-0 top-1 grid h-9 w-9 place-items-center rounded-full border-2 ${n.warning ? "border-trust-medium bg-trust-medium/10 text-trust-medium" : "border-teal bg-teal/10 text-teal shadow-glow"}`}
-                  >
-                    {n.warning ? (
-                      <AlertTriangle className="h-4 w-4" />
-                    ) : (
-                      <Globe className="h-4 w-4" />
-                    )}
-                  </div>
-                  <div className="rounded-xl border border-border bg-background/40 p-4 transition-colors hover:border-teal/40">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-semibold">{n.label}</span>
-                      <span className="rounded-md bg-muted px-2 py-0.5 text-xs">{n.platform}</span>
-                      <span className="text-xs text-muted-foreground">{n.timestamp}</span>
-                      {n.warning && (
-                        <span className="rounded-md bg-trust-medium/15 px-2 py-0.5 text-xs font-medium text-trust-medium">
-                          Questionable source
-                        </span>
+          {nodes.length === 0 ? (
+            <div className="mt-5 rounded-xl border border-dashed border-border bg-background/40 p-8 text-center text-sm text-muted-foreground">
+              No replay nodes for this analysis. Run a new verification or open a result that
+              includes TrustReplay data.
+            </div>
+          ) : (
+            <div className="relative mt-5">
+              <div
+                className="absolute inset-y-0 left-4 w-px bg-gradient-to-b from-teal/60 via-border to-transparent"
+                aria-hidden
+              />
+              <ol className="space-y-4">
+                {nodes.map((n) => (
+                  <li key={n.id} className="relative pl-12">
+                    <div
+                      className={`absolute left-0 top-1 grid h-9 w-9 place-items-center rounded-full border-2 ${
+                        n.warning
+                          ? "border-trust-medium bg-trust-medium/10 text-trust-medium"
+                          : "border-teal bg-teal/10 text-teal shadow-glow"
+                      }`}
+                    >
+                      {n.warning ? (
+                        <AlertTriangle className="h-4 w-4" />
+                      ) : (
+                        <Globe className="h-4 w-4" />
                       )}
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      Potential reach:{" "}
-                      <span className="font-semibold text-foreground">
-                        {n.reach.toLocaleString()}
-                      </span>
+                    <div className="rounded-xl border border-border bg-background/40 p-4 transition-colors hover:border-teal/40">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold">{n.label}</span>
+                        <span className="rounded-md bg-muted px-2 py-0.5 text-xs">{n.platform}</span>
+                        <span className="text-xs text-muted-foreground">{n.timestamp}</span>
+                        {n.warning && (
+                          <span className="rounded-md bg-trust-medium/15 px-2 py-0.5 text-xs font-medium text-trust-medium">
+                            Questionable source
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Potential reach:{" "}
+                        <span className="font-semibold text-foreground">
+                          {n.reach.toLocaleString()}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
         </div>
       </div>
 
@@ -122,7 +178,9 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "wa
     <div className="glass rounded-2xl p-5">
       <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{label}</div>
       <div
-        className={`mt-1 font-display text-3xl font-semibold tracking-tight ${tone === "warn" ? "text-trust-medium" : ""}`}
+        className={`mt-1 font-display text-3xl font-semibold tracking-tight ${
+          tone === "warn" ? "text-trust-medium" : ""
+        }`}
       >
         {value}
       </div>

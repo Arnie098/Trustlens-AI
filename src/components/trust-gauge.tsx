@@ -25,7 +25,7 @@ export function TrustGauge({
   size?: number;
   animate?: boolean;
 }) {
-  const stroke = 16;
+  const stroke = Math.max(10, Math.round(size * 0.07));
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const reduced = usePrefersReducedMotion();
@@ -57,9 +57,16 @@ export function TrustGauge({
   const dash = c * pct;
   const color = trustColorVar(category);
 
+  // Scale center typography with gauge diameter so size={140} doesn't clip
+  const scorePx = Math.max(22, Math.round(size * 0.22));
+  const labelPx = Math.max(9, Math.round(size * 0.055));
+  const badgePx = Math.max(9, Math.round(size * 0.055));
+  const badgePadX = Math.max(8, Math.round(size * 0.05));
+  const showBadge = size >= 120;
+
   return (
-    <div className="relative inline-flex items-center justify-center">
-      <svg width={size} height={size} className="-rotate-90">
+    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90" aria-hidden>
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -80,19 +87,32 @@ export function TrustGauge({
           style={{ transition: "stroke-dasharray 300ms ease-out" }}
         />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="text-5xl font-black tabular-nums" style={{ color }}>
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-2 text-center">
+        <div
+          className="font-black tabular-nums leading-none"
+          style={{ color, fontSize: scorePx }}
+        >
           {display}
         </div>
-        <div className="mt-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        <div
+          className="mt-1 font-medium uppercase tracking-wider text-muted-foreground"
+          style={{ fontSize: labelPx }}
+        >
           TrustScore
         </div>
-        <div
-          className="mt-2 rounded-full px-3 py-1 text-xs font-semibold"
-          style={{ background: `color-mix(in oklab, ${color} 15%, transparent)`, color }}
-        >
-          {trustLabel(category)}
-        </div>
+        {showBadge && (
+          <div
+            className="mt-1.5 max-w-[90%] truncate rounded-full font-semibold leading-tight"
+            style={{
+              background: `color-mix(in oklab, ${color} 15%, transparent)`,
+              color,
+              fontSize: badgePx,
+              padding: `0.2em ${badgePadX}px`,
+            }}
+          >
+            {trustLabel(category)}
+          </div>
+        )}
       </div>
     </div>
   );

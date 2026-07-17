@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { db, supabase } from "@/lib/db";
@@ -16,18 +16,31 @@ export const Route = createFileRoute("/_authenticated/profile")({
   component: ProfilePage,
 });
 
+const LANGUAGES = [
+  { value: "en", label: "English" },
+  { value: "fil", label: "Filipino" },
+  { value: "es", label: "Spanish" },
+  { value: "fr", label: "French" },
+  { value: "zh", label: "Chinese" },
+  { value: "ja", label: "Japanese" },
+  { value: "ko", label: "Korean" },
+  { value: "ar", label: "Arabic" },
+];
+
 function ProfilePage() {
   const { user, profile, refresh } = useSession();
   const [saving, setSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
 
-  const { data: history } = useQuery({
+  const { data: history, isLoading: historyLoading } = useQuery({
     queryKey: ["profile-history", user?.id],
     enabled: !!user,
     queryFn: async () => {
       const [ver, attempts] = await Promise.all([
         db
           .from("verification_results")
-          .select("id, trust_score, category, created_at")
+          .select("id, request_id, trust_score, category, created_at")
           .eq("user_id", user!.id)
           .order("created_at", { ascending: false })
           .limit(10),
@@ -41,6 +54,8 @@ function ProfilePage() {
       return { verifications: ver.data ?? [], attempts: attempts.data ?? [] };
     },
   });
+  const [toggling, setToggling] = useState<"ai" | "email" | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
@@ -64,6 +79,7 @@ function ProfilePage() {
               e.preventDefault();
               if (!user) return;
               const fd = new FormData(e.currentTarget);
+              setProfileError(null);
               setSaving(true);
               const { error } = await db
                 .from("profiles")
@@ -73,7 +89,10 @@ function ProfilePage() {
                 })
                 .eq("id", user.id);
               setSaving(false);
-              if (error) return toast.error(error.message);
+              if (error) {
+                setProfileError(error.message);
+                return;
+              }
               toast.success("Profile updated");
               refresh();
             }}
@@ -85,6 +104,7 @@ function ProfilePage() {
                 name="full_name"
                 defaultValue={profile?.full_name ?? ""}
                 maxLength={80}
+                onChange={() => setProfileError(null)}
               />
             </div>
             <div>
@@ -96,36 +116,80 @@ function ProfilePage() {
             </div>
             <div>
               <Label htmlFor="preferred_language">Preferred language</Label>
-              <Input
+              <select
                 id="preferred_language"
                 name="preferred_language"
                 defaultValue={profile?.preferred_language ?? "en"}
-                maxLength={8}
-              />
+                className="mt-1 flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                onChange={() => setProfileError(null)}
+              >
+                {LANGUAGES.map((l) => (
+                  <option key={l.value} value={l.value}>
+                    {l.label}
+                  </option>
+                ))}
+                {profile?.preferred_language &&
+                  !LANGUAGES.some((l) => l.value === profile.preferred_language) && (
+                    <option value={profile.preferred_language}>
+                      {profile.preferred_language}
+                    </option>
+                  )}
+              </select>
             </div>
             <div>
-              <Label>Profile image</Label>
-              <input
-                type="file"
-                accept="image/*"
-                className="text-sm"
-                onChange={async (e) => {
-                  const f = e.target.files?.[0];
-                  if (!f || !user) return;
-                  const path = `${user.id}/avatar-${Date.now()}-${f.name}`;
-                  const { error: uploadErr } = await supabase.storage
-                    .from("verification-uploads")
-                    .upload(path, f);
-                  if (uploadErr) return toast.error(uploadErr.message);
-                  await db.from("profiles").update({ avatar_url: path }).eq("id", user.id);
-                  toast.success("Profile image saved");
-                  refresh();
-                }}
-              />
+              <Label htmlFor="avatar">Profile image</Label>
+              <label
+                htmlFor="avatar"
+                className="mt-1.5 flex min-h-11 cursor-pointer items-center justify-center rounded-xl border border-dashed border-border bg-background/40 px-4 text-sm text-muted-foreground transition-colors hover:border-teal/40"
+              >
+                Choose image…
+                <input
+                  id="avatar"
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f || !user) return;
+                    setAvatarError(null);
+                    const path = `${user.id}/avatar-${Date.now()}-${f.name}`;
+                    const { error: uploadErr } = await supabase.storage
+                      .from("verification-uploads")
+                      .upload(path, f);
+                    if (uploadErr) {
+                      setAvatarError(uploadErr.message);
+                      return;
+                    }
+                    const { error: saveErr } = await db
+                      .from("profiles")
+                      .update({ avatar_url: path })
+                      .eq("id", user.id);
+                    if (saveErr) {
+                      setAvatarError(saveErr.message);
+                      return;
+                    }
+                    toast.success("Profile image saved");
+                    refresh();
+                  }}
+                />
+              </label>
+              {avatarError && (
+                <p className="mt-1 text-xs text-destructive" role="alert">
+                  {avatarError}
+                </p>
+              )}
             </div>
+            {profileError && (
+              <p
+                className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+                role="alert"
+              >
+                {profileError}
+              </p>
+            )}
             <Button
               disabled={saving}
-              className="rounded-full shadow-glow transition-transform hover:scale-[1.02]"
+              className="min-h-11 rounded-full shadow-glow transition-transform hover:scale-[1.02]"
             >
               {saving ? "Saving…" : "Save changes"}
             </Button>
@@ -152,20 +216,29 @@ function ProfilePage() {
             </div>
             <Switch
               checked={profile?.ai_consent ?? false}
+              disabled={toggling === "ai"}
               onCheckedChange={async (v) => {
                 if (!user) return;
-                await db
-                  .from("consent_records")
-                  .insert({ user_id: user.id, granted: v, scope: "ai_processing" });
-                await db
-                  .from("profiles")
-                  .update({
-                    ai_consent: v,
-                    ai_consent_at: v ? new Date().toISOString() : null,
-                  })
-                  .eq("id", user.id);
-                refresh();
-                toast.success(v ? "Consent granted" : "Consent withdrawn");
+                setToggling("ai");
+                try {
+                  await db
+                    .from("consent_records")
+                    .insert({ user_id: user.id, granted: v, scope: "ai_processing" });
+                  const { error } = await db
+                    .from("profiles")
+                    .update({
+                      ai_consent: v,
+                      ai_consent_at: v ? new Date().toISOString() : null,
+                    })
+                    .eq("id", user.id);
+                  if (error) throw new Error(error.message);
+                  await refresh();
+                  toast.success(v ? "Consent granted" : "Consent withdrawn");
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Could not update consent");
+                } finally {
+                  setToggling(null);
+                }
               }}
             />
           </div>
@@ -177,10 +250,23 @@ function ProfilePage() {
             </div>
             <Switch
               checked={profile?.notification_email ?? true}
+              disabled={toggling === "email"}
               onCheckedChange={async (v) => {
                 if (!user) return;
-                await db.from("profiles").update({ notification_email: v }).eq("id", user.id);
-                refresh();
+                setToggling("email");
+                try {
+                  const { error } = await db
+                    .from("profiles")
+                    .update({ notification_email: v })
+                    .eq("id", user.id);
+                  if (error) throw new Error(error.message);
+                  await refresh();
+                  toast.success(v ? "Email notifications on" : "Email notifications off");
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Could not update notifications");
+                } finally {
+                  setToggling(null);
+                }
               }}
             />
           </div>
@@ -196,21 +282,28 @@ function ProfilePage() {
                 <Button
                   variant="destructive"
                   size="sm"
-                  className="mt-3 rounded-full"
+                  className="mt-3 min-h-11 rounded-full"
+                  disabled={deleting}
                   onClick={async () => {
                     if (!user) return;
                     if (!confirm("This permanently deletes your data. Continue?")) return;
-                    await db.from("verification_requests").delete().eq("user_id", user.id);
-                    await db.from("quiz_attempts").delete().eq("user_id", user.id);
-                    await db.from("user_learning_progress").delete().eq("user_id", user.id);
-                    await db.from("user_badges").delete().eq("user_id", user.id);
-                    await db.from("uploaded_content").delete().eq("user_id", user.id);
-                    await db.from("profiles").delete().eq("id", user.id);
-                    await supabase.auth.signOut();
-                    window.location.href = "/";
+                    setDeleting(true);
+                    try {
+                      await db.from("verification_requests").delete().eq("user_id", user.id);
+                      await db.from("quiz_attempts").delete().eq("user_id", user.id);
+                      await db.from("user_learning_progress").delete().eq("user_id", user.id);
+                      await db.from("user_badges").delete().eq("user_id", user.id);
+                      await db.from("uploaded_content").delete().eq("user_id", user.id);
+                      await db.from("profiles").delete().eq("id", user.id);
+                      await supabase.auth.signOut();
+                      window.location.href = "/";
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Delete failed");
+                      setDeleting(false);
+                    }
                   }}
                 >
-                  Delete my data
+                  {deleting ? "Deleting…" : "Delete my data"}
                 </Button>
               </div>
             </div>
@@ -223,13 +316,21 @@ function ProfilePage() {
           <CardTitle className="font-display tracking-tight">Recent verifications</CardTitle>
         </CardHeader>
         <CardContent>
-          {history?.verifications.length ? (
+          {historyLoading && !history ? (
+            <p className="text-sm text-muted-foreground animate-pulse">Loading history…</p>
+          ) : history?.verifications.length ? (
             <ul className="space-y-2 text-sm">
               {history.verifications.map(
-                (v: { id: string; trust_score: number; category: string; created_at: string }) => (
+                (v: {
+                  id: string;
+                  request_id: string;
+                  trust_score: number;
+                  category: string;
+                  created_at: string;
+                }) => (
                   <li
                     key={v.id}
-                    className="flex justify-between border-b border-border py-2 last:border-0"
+                    className="flex items-center justify-between gap-3 border-b border-border py-2 last:border-0"
                   >
                     <span className="text-muted-foreground">
                       {new Date(v.created_at).toLocaleDateString()}
@@ -238,6 +339,15 @@ function ProfilePage() {
                       <span className="text-teal">{v.trust_score}</span> ·{" "}
                       {v.category.replaceAll("_", " ")}
                     </span>
+                    {v.request_id ? (
+                      <Link
+                        to="/verify/$id"
+                        params={{ id: v.request_id }}
+                        className="text-xs font-medium text-teal underline-offset-2 hover:underline"
+                      >
+                        View
+                      </Link>
+                    ) : null}
                   </li>
                 ),
               )}
@@ -253,7 +363,9 @@ function ProfilePage() {
           <CardTitle className="font-display tracking-tight">Quiz history</CardTitle>
         </CardHeader>
         <CardContent>
-          {history?.attempts.length ? (
+          {historyLoading && !history ? (
+            <p className="text-sm text-muted-foreground animate-pulse">Loading history…</p>
+          ) : history?.attempts.length ? (
             <ul className="space-y-2 text-sm">
               {history.attempts.map(
                 (a: {

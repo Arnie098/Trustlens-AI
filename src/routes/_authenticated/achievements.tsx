@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { useSession } from "@/lib/auth/session";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Trophy, Lock, Award, Brain, BookOpen, Search, ShieldCheck } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -22,7 +23,7 @@ export const Route = createFileRoute("/_authenticated/achievements")({
 
 function Achievements() {
   const { user } = useSession();
-  const { data } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["achievements", user?.id],
     enabled: !!user,
     queryFn: async () => {
@@ -66,53 +67,96 @@ function Achievements() {
         )}
       </div>
 
-      <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {data?.all.map(
-          (b: {
-            id: string;
-            slug: string;
-            title: string;
-            description: string;
-            icon: string;
-            criteria: string;
-          }) => {
-            const earned = data.earned.find((x: { badge_id: string }) => x.badge_id === b.id);
-            const Icon = ICONS[b.icon] ?? Award;
-            return (
-              <Card
-                key={b.id}
-                className={`glass border-white/10 transition-all ${
-                  earned
-                    ? "shadow-glow hover:-translate-y-0.5"
-                    : "opacity-60 saturate-50 hover:opacity-80"
-                }`}
-              >
-                <CardContent className="pt-6">
-                  <div
-                    className={`grid h-14 w-14 place-items-center rounded-2xl ${earned ? "bg-gradient-primary text-primary-foreground shadow-glow" : "bg-muted text-muted-foreground"}`}
-                  >
-                    {earned ? <Icon className="h-7 w-7" /> : <Lock className="h-6 w-6" />}
-                  </div>
-                  <div className="mt-4 font-display text-lg font-semibold tracking-tight">
-                    {b.title}
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">{b.description}</p>
-                  <div className="mt-3 text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground/80">How to earn:</span>{" "}
-                    {b.criteria}
-                  </div>
-                  {earned && (
-                    <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-teal/15 px-2.5 py-1 text-xs font-semibold text-teal">
-                      <Trophy className="h-3 w-3" />
-                      Earned {new Date(earned.awarded_at).toLocaleDateString()}
+      {isError && (
+        <div className="mt-8 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">
+          <p className="font-medium">Could not load achievements.</p>
+          <p className="mt-1 text-muted-foreground">
+            {(error as Error)?.message || "Something went wrong."}
+          </p>
+          <Button variant="outline" size="sm" className="mt-3 rounded-full" onClick={() => refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {isLoading && !data && (
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Card key={i} className="glass border-white/10">
+              <CardContent className="pt-6">
+                <div className="h-14 w-14 animate-pulse rounded-2xl bg-muted" />
+                <div className="mt-4 h-5 w-2/3 animate-pulse rounded bg-muted" />
+                <div className="mt-2 h-4 w-full animate-pulse rounded bg-muted" />
+                <div className="mt-2 h-3 w-4/5 animate-pulse rounded bg-muted" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {!isLoading && data && data.all.length === 0 && (
+        <Card className="glass mt-10 border-white/10">
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            No badges are configured yet. Check back after the next seed or platform update.
+          </CardContent>
+        </Card>
+      )}
+
+      {data && data.all.length > 0 && (
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {data.all.map(
+            (b: {
+              id: string;
+              slug: string;
+              title: string;
+              description: string;
+              icon: string;
+              criteria: string;
+            }) => {
+              const earned = data.earned.find((x: { badge_id: string }) => x.badge_id === b.id);
+              const Icon = ICONS[b.icon] ?? Award;
+              return (
+                <Card
+                  key={b.id}
+                  className={`glass border-white/10 transition-all ${
+                    earned ? "shadow-glow hover:-translate-y-0.5" : "border-dashed"
+                  }`}
+                >
+                  <CardContent className="pt-6">
+                    <div
+                      className={`grid h-14 w-14 place-items-center rounded-2xl ${
+                        earned
+                          ? "bg-gradient-primary text-primary-foreground shadow-glow"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {earned ? <Icon className="h-7 w-7" /> : <Lock className="h-6 w-6" aria-hidden />}
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          },
-        )}
-      </div>
+                    <div className="mt-4 flex items-center gap-2 font-display text-lg font-semibold tracking-tight">
+                      {b.title}
+                      {!earned && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                          Locked
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">{b.description}</p>
+                    <div className="mt-3 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground/80">How to earn:</span> {b.criteria}
+                    </div>
+                    {earned && (
+                      <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-teal/15 px-2.5 py-1 text-xs font-semibold text-teal">
+                        <Trophy className="h-3 w-3" />
+                        Earned {new Date(earned.awarded_at).toLocaleDateString()}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            },
+          )}
+        </div>
+      )}
     </main>
   );
 }

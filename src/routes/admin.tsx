@@ -1,11 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { db } from "@/lib/db";
 import { useSession } from "@/lib/auth/session";
 import { AdminHeader } from "@/components/admin-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Users,
   ShieldAlert,
@@ -13,6 +14,7 @@ import {
   Search,
   ShieldCheck,
 } from "lucide-react";
+import { toast } from "sonner";
 import { trustLabel, trustColorVar } from "@/lib/ai/mock-analyze";
 import type { TrustCategory } from "@/lib/db";
 
@@ -33,6 +35,10 @@ export const Route = createFileRoute("/admin")({
 function AdminConsole() {
   const { user, isAdmin, loading } = useSession();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [actingId, setActingId] = useState<string | null>(null);
+  const [roleActingId, setRoleActingId] = useState<string | null>(null);
+  const [usersError, setUsersError] = useState<string | null>(null);
 
   useEffect(() => {
     if (loading) return;
@@ -45,7 +51,7 @@ function AdminConsole() {
     }
   }, [loading, user, isAdmin, navigate]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["admin-stats"],
     enabled: Boolean(user && isAdmin),
     queryFn: async () => {
@@ -111,6 +117,68 @@ function AdminConsole() {
     },
   });
 
+  async function updateReportStatus(
+    id: string,
+    status: "resolved" | "dismissed",
+    successMessage: string,
+  ) {
+    setActingId(id);
+    try {
+      const { error: upErr } = await db
+        .from("moderation_reports")
+        .update({
+          status,
+          resolved_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+      if (upErr) throw new Error(upErr.message || "Update failed");
+      toast.success(successMessage);
+      await queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not update report");
+    } finally {
+      setActingId(null);
+    }
+  }
+
+  async function setUserAdmin(targetUserId: string, makeAdmin: boolean) {
+    if (!user) return;
+    setUsersError(null);
+    setRoleActingId(targetUserId);
+    try {
+      if (makeAdmin) {
+        const { error: insErr } = await db.from("user_roles").insert({
+          user_id: targetUserId,
+          role: "admin",
+        });
+        if (insErr) throw new Error(insErr.message || "Could not grant admin");
+        toast.success("Admin role granted");
+      } else {
+        if (targetUserId === user.id) {
+          throw new Error("You can’t remove your own admin role while signed in.");
+        }
+        const adminCount = data?.adminCount ?? 0;
+        if (adminCount <= 1) {
+          throw new Error("At least one admin must remain on the platform.");
+        }
+        const { error: delErr } = await db
+          .from("user_roles")
+          .delete()
+          .eq("user_id", targetUserId)
+          .eq("role", "admin");
+        if (delErr) throw new Error(delErr.message || "Could not remove admin");
+        toast.success("Admin role removed");
+      }
+      await queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not update role";
+      setUsersError(msg);
+      toast.error(msg);
+    } finally {
+      setRoleActingId(null);
+    }
+  }
+
   if (loading || !user || !isAdmin) {
     return (
       <div className="grid min-h-screen place-items-center bg-background">
@@ -141,9 +209,40 @@ function AdminConsole() {
           </Badge>
         </div>
 
+        {isError && (
+          <div className="mt-8 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">
+            <p className="font-medium">Could not load admin metrics.</p>
+            <p className="mt-1 text-muted-foreground">
+              {(error as Error)?.message || "Something went wrong."}
+            </p>
+            <button
+              type="button"
+              className="mt-3 text-sm font-medium text-primary underline-offset-2 hover:underline"
+              onClick={() => refetch()}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {isLoading && !data ? (
-          <p className="mt-10 text-sm text-muted-foreground">Loading metrics…</p>
-        ) : (
+          <div className="mt-10 space-y-4">
+            <p className="text-sm text-muted-foreground animate-pulse">Loading metrics…</p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Card key={i}>
+                  <CardContent className="flex items-center gap-4 pt-6">
+                    <div className="h-12 w-12 animate-pulse rounded-xl bg-muted" />
+                    <div className="space-y-2">
+                      <div className="h-7 w-10 animate-pulse rounded bg-muted" />
+                      <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        ) : data ? (
           <>
             <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Stat icon={Users} label="Users" value={data?.totalUsers ?? 0} />
@@ -258,19 +357,25 @@ function AdminConsole() {
               </CardContent>
             </Card>
 
-            <Card className="mt-6">
+            <Card className="mt-6" id="users">
               <CardHeader>
-                <CardTitle>User management</CardTitle>
+                <CardTitle>Users</CardTitle>
               </CardHeader>
               <CardContent>
+                {usersError && (
+                  <p className="mb-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                    {usersError}
+                  </p>
+                )}
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-muted-foreground">
-                        <th className="py-2">Name</th>
-                        <th className="py-2">Email</th>
-                        <th className="py-2">Role</th>
-                        <th className="py-2">Joined</th>
+                        <th className="py-2 pr-3">Name</th>
+                        <th className="py-2 pr-3">Email</th>
+                        <th className="py-2 pr-3">Role</th>
+                        <th className="py-2 pr-3">Joined</th>
+                        <th className="py-2 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -280,51 +385,127 @@ function AdminConsole() {
                           full_name: string;
                           email: string;
                           created_at: string;
-                        }) => (
-                          <tr key={u.id} className="border-t border-border">
-                            <td className="py-2">{u.full_name ?? "—"}</td>
-                            <td className="py-2">{u.email ?? "—"}</td>
-                            <td className="py-2">
-                              {data?.adminIds?.has(u.id) ? (
-                                <Badge>admin</Badge>
-                              ) : (
-                                <Badge variant="secondary">user</Badge>
-                              )}
-                            </td>
-                            <td className="py-2">
-                              {new Date(u.created_at).toLocaleDateString()}
-                            </td>
-                          </tr>
-                        ),
+                        }) => {
+                          const isUserAdmin = Boolean(data?.adminIds?.has(u.id));
+                          const isSelf = u.id === user.id;
+                          const busy = roleActingId === u.id;
+                          return (
+                            <tr key={u.id} className="border-t border-border">
+                              <td className="py-2.5 pr-3">
+                                {u.full_name ?? "—"}
+                                {isSelf && (
+                                  <span className="ml-1 text-xs text-muted-foreground">(you)</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 pr-3">{u.email ?? "—"}</td>
+                              <td className="py-2.5 pr-3">
+                                {isUserAdmin ? (
+                                  <Badge>admin</Badge>
+                                ) : (
+                                  <Badge variant="secondary">user</Badge>
+                                )}
+                              </td>
+                              <td className="py-2.5 pr-3">
+                                {new Date(u.created_at).toLocaleDateString()}
+                              </td>
+                              <td className="py-2.5 text-right">
+                                {isUserAdmin ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={busy || isSelf || (data?.adminCount ?? 0) <= 1}
+                                    title={
+                                      isSelf
+                                        ? "You can’t demote yourself"
+                                        : (data?.adminCount ?? 0) <= 1
+                                          ? "Keep at least one admin"
+                                          : "Remove admin role"
+                                    }
+                                    onClick={() => setUserAdmin(u.id, false)}
+                                  >
+                                    {busy ? "Saving…" : "Demote"}
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    disabled={busy}
+                                    onClick={() => setUserAdmin(u.id, true)}
+                                  >
+                                    {busy ? "Saving…" : "Make admin"}
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        },
                       )}
                     </tbody>
                   </table>
                 </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Promoting grants the <code className="text-foreground">admin</code> role in{" "}
+                  <code className="text-foreground">user_roles</code>. Demote is blocked for your
+                  own account and when only one admin remains.
+                </p>
               </CardContent>
             </Card>
 
-            <Card className="mt-6">
+            <Card className="mt-6" id="moderation">
               <CardHeader>
                 <CardTitle>Moderation queue</CardTitle>
               </CardHeader>
               <CardContent>
                 {data?.reports.length ? (
-                  <ul className="space-y-2 text-sm">
+                  <ul className="space-y-3 text-sm">
                     {data.reports.map(
                       (r: {
                         id: string;
                         reason: string;
                         created_at: string;
                         status: string;
+                        verification_result_id: string | null;
                       }) => (
-                        <li key={r.id} className="rounded-lg border border-border p-3">
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(r.created_at).toLocaleString()}
+                        <li
+                          key={r.id}
+                          className="flex flex-col gap-3 rounded-lg border border-border p-3 sm:flex-row sm:items-start sm:justify-between"
+                        >
+                          <div className="min-w-0">
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(r.created_at).toLocaleString()}
+                            </div>
+                            <div className="mt-1 font-medium">{r.reason}</div>
+                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                              <Badge variant="outline">{r.status}</Badge>
+                              {r.verification_result_id && (
+                                <span className="text-xs text-muted-foreground">
+                                  Result {r.verification_result_id.slice(0, 8)}…
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div className="mt-1 font-medium">{r.reason}</div>
-                          <Badge variant="outline" className="mt-1">
-                            {r.status}
-                          </Badge>
+                          <div className="flex shrink-0 flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={actingId === r.id}
+                              onClick={() =>
+                                updateReportStatus(r.id, "resolved", "Report resolved")
+                              }
+                            >
+                              {actingId === r.id ? "Saving…" : "Resolve"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={actingId === r.id}
+                              onClick={() =>
+                                updateReportStatus(r.id, "dismissed", "Report dismissed")
+                              }
+                            >
+                              Dismiss
+                            </Button>
+                          </div>
                         </li>
                       ),
                     )}
@@ -341,7 +522,7 @@ function AdminConsole() {
               roles are DB-backed (`users`, `user_roles`, `sessions`).
             </p>
           </>
-        )}
+        ) : null}
       </main>
     </div>
   );

@@ -9,12 +9,18 @@ import { trustLabel } from "@/lib/ai/mock-analyze";
 import {
   AlertTriangle,
   CheckCircle2,
+  ExternalLink,
   Rewind,
   GraduationCap,
   Search,
   ShieldAlert,
   Sparkles,
 } from "lucide-react";
+import { parseEvidenceItems } from "@/lib/evidence";
+import {
+  sanitizeAnalysisProse,
+  sanitizeDisplayList,
+} from "@/lib/ai/sanitize-text";
 import {
   Dialog,
   DialogContent,
@@ -105,11 +111,13 @@ function ResultsPage() {
   }
 
   const req = data.verification_requests;
+  const concerns = sanitizeDisplayList(data.concerns);
+  const nextSteps = sanitizeDisplayList(data.next_steps);
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
       <div className="grid gap-8 lg:grid-cols-[300px_1fr]">
-        <div className="lg:sticky lg:top-24 lg:self-start">
+        <div className="lg:sticky lg:top-[var(--site-header-offset)] lg:self-start">
           <div className="prism-sheen relative animate-scale-in">
             <div className="prism-layer" aria-hidden="true" />
             <div className="glass flex flex-col items-center rounded-2xl p-6 shadow-glow">
@@ -130,20 +138,28 @@ function ResultsPage() {
           <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
             {req?.type === "url" ? "URL" : req?.type === "text" ? "Text" : "Image"}
           </div>
-          <h1 className="mt-2 truncate font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-            {req?.input_url ?? req?.input_text?.slice(0, 80) ?? "Image submission"}
-          </h1>
+          <ResultTitle
+            text={req?.input_url ?? req?.input_text ?? "Image submission"}
+          />
 
           <div className="glass mt-5 rounded-2xl p-5">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <Sparkles className="h-4 w-4 text-teal" /> Assessment summary
             </div>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{data.summary}</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              {sanitizeAnalysisProse(data.summary, "summary")}
+            </p>
           </div>
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <InfoCard title="Source assessment" body={data.source_assessment} />
-            <InfoCard title="Context analysis" body={data.context_analysis} />
+            <InfoCard
+              title="Source assessment"
+              body={sanitizeAnalysisProse(data.source_assessment, "source_assessment")}
+            />
+            <InfoCard
+              title="Context analysis"
+              body={sanitizeAnalysisProse(data.context_analysis, "context_analysis")}
+            />
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -158,44 +174,45 @@ function ResultsPage() {
               icon={AlertTriangle}
               tone="warn"
               title="Potential concerns"
-              items={data.concerns ?? []}
+              items={concerns}
             />
-            <List
-              icon={CheckCircle2}
-              tone="ok"
-              title="Supporting evidence"
-              items={data.evidence ?? []}
-            />
+            <EvidenceList items={data.evidence ?? []} />
           </div>
 
           <div className="glass mt-6 rounded-2xl p-5">
             <div className="text-sm font-semibold">Recommended next steps</div>
-            <ol className="mt-3 space-y-2 text-sm text-muted-foreground">
-              {(data.next_steps ?? []).map((s: string, i: number) => (
-                <li key={i} className="flex gap-3">
-                  <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-teal/15 text-xs font-bold text-teal">
-                    {i + 1}
-                  </span>
-                  <span>{s}</span>
-                </li>
-              ))}
-            </ol>
+            {nextSteps.length ? (
+              <ol className="mt-3 space-y-2 text-sm text-muted-foreground">
+                {nextSteps.map((s: string, i: number) => (
+                  <li key={i} className="flex gap-3">
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-teal/15 text-xs font-bold text-teal">
+                      {i + 1}
+                    </span>
+                    <span className="min-w-0 break-words">{s}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="mt-3 text-sm text-muted-foreground">
+                No recommended steps for this result.
+              </p>
+            )}
           </div>
 
           <div className="mt-6 flex flex-wrap gap-2">
             <Button
               onClick={() => navigate({ to: "/verify" })}
-              className="rounded-full shadow-glow transition-transform hover:scale-[1.02]"
+              className="min-h-11 rounded-full shadow-glow transition-transform hover:scale-[1.02]"
             >
               <Search className="mr-2 h-4 w-4" /> Verify another
             </Button>
             <Link to="/trust-replay/$id" params={{ id: data.id }}>
-              <Button variant="outline" className="rounded-full">
+              <Button variant="outline" className="min-h-11 rounded-full">
                 <Rewind className="mr-2 h-4 w-4" /> View TrustReplay
               </Button>
             </Link>
             <Link to="/learn">
-              <Button variant="outline" className="rounded-full">
+              <Button variant="ghost" className="min-h-11 rounded-full">
                 <GraduationCap className="mr-2 h-4 w-4" /> Related lesson
               </Button>
             </Link>
@@ -219,16 +236,24 @@ function ResultsPage() {
               This content may need further verification. Review the evidence before sharing it.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="flex flex-col gap-2 sm:flex-row">
-            <Button variant="outline" className="flex-1" onClick={() => setPauseOpen(false)}>
-              Review Evidence
+          <DialogFooter className="flex flex-col gap-2 sm:flex-col">
+            <Button className="w-full min-h-11" onClick={() => setPauseOpen(false)}>
+              Review evidence
             </Button>
-            <Button variant="ghost" className="flex-1" onClick={() => setPauseOpen(false)}>
-              Continue Anyway
-            </Button>
-            <Link to="/learn" className="flex-1">
-              <Button className="w-full">Learn How to Verify</Button>
-            </Link>
+            <div className="flex w-full flex-col gap-2 sm:flex-row">
+              <Link to="/learn" className="flex-1">
+                <Button variant="outline" className="w-full min-h-11">
+                  Learn how to verify
+                </Button>
+              </Link>
+              <Button
+                variant="ghost"
+                className="flex-1 min-h-11"
+                onClick={() => setPauseOpen(false)}
+              >
+                Dismiss
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -236,11 +261,39 @@ function ResultsPage() {
   );
 }
 
+function ResultTitle({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const long = text.length > 120;
+  return (
+    <div className="mt-2">
+      <h1
+        className={`font-display text-2xl font-semibold tracking-tight sm:text-3xl ${
+          expanded ? "break-words whitespace-pre-wrap" : "line-clamp-2 break-words"
+        }`}
+      >
+        {text}
+      </h1>
+      {long && (
+        <button
+          type="button"
+          className="mt-1 text-xs font-medium text-teal underline-offset-2 hover:underline"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function InfoCard({ title, body }: { title: string; body: string | null }) {
+  const text = (body ?? "").trim() || "—";
   return (
     <div className="glass rounded-2xl p-4">
       <div className="text-sm font-semibold">{title}</div>
-      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{body ?? "—"}</p>
+      <p className="mt-1 text-sm leading-relaxed text-muted-foreground break-words whitespace-pre-wrap">
+        {text}
+      </p>
     </div>
   );
 }
@@ -268,13 +321,75 @@ function List({
           items.map((it, i) => (
             <li key={i} className="flex gap-2">
               <span className={`mt-2 h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
-              <span>{it}</span>
+              <span className="min-w-0 break-words">{it}</span>
             </li>
           ))
         ) : (
-          <li className="text-xs opacity-70">None detected.</li>
+          <li className="text-xs text-muted-foreground">None detected.</li>
         )}
       </ul>
+    </div>
+  );
+}
+
+/** Evidence with prose bullets + clean, clickable source links (no raw Citation: dumps). */
+function EvidenceList({ items }: { items: string[] }) {
+  const { prose, sources } = parseEvidenceItems(items);
+  const empty = prose.length === 0 && sources.length === 0;
+
+  return (
+    <div className="glass rounded-2xl p-4">
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <CheckCircle2 className="h-4 w-4 text-trust-high" /> Supporting evidence
+      </div>
+
+      {empty ? (
+        <p className="mt-3 text-xs text-muted-foreground">None detected.</p>
+      ) : (
+        <div className="mt-3 space-y-4">
+          {prose.length > 0 && (
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              {prose.map((it, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-trust-high" />
+                  <span className="min-w-0 break-words">{it.text}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {sources.length > 0 && (
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Sources
+              </div>
+              <ul className="mt-2 space-y-1.5">
+                {sources.map((s) => (
+                  <li key={s.url}>
+                    <a
+                      href={s.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group flex min-h-10 items-center gap-2 rounded-lg border border-border bg-background/40 px-3 py-2 text-sm transition-colors hover:border-teal/40 hover:bg-teal/5"
+                      title={s.url}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 shrink-0 text-teal" aria-hidden />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-foreground group-hover:text-teal">
+                          {s.hostname}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {s.label}
+                        </span>
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

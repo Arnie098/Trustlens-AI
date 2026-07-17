@@ -10,7 +10,7 @@ import { supabase } from "@/lib/db";
 import { useSession } from "@/lib/auth/session";
 import { homePathForUser } from "@/lib/auth/redirect";
 import { toast } from "sonner";
-import { ShieldCheck } from "lucide-react";
+import { BrandLogo } from "@/components/brand-logo";
 
 const searchSchema = z.object({ mode: z.enum(["login", "signup"]).optional() });
 
@@ -36,15 +36,22 @@ function AuthPage() {
     navigate({ to: homePathForUser(isAdmin ? { app_metadata: { is_admin: true } } : user), replace: true });
   }, [user, isAdmin, loading, navigate]);
 
+  if (loading || user) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-gradient-hero px-4 py-10">
+        <p className="text-sm text-muted-foreground animate-pulse">
+          {user ? "Redirecting…" : "Loading…"}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="grid min-h-screen place-items-center bg-gradient-hero px-4 py-10">
       <div className="w-full max-w-md">
-        <Link to="/" className="mb-6 flex items-center justify-center gap-2 text-navy-foreground">
-          <div className="grid h-10 w-10 place-items-center rounded-lg bg-white/10 backdrop-blur">
-            <ShieldCheck className="h-5 w-5" />
-          </div>
-          <span className="text-xl font-bold">TrustLensAI</span>
-        </Link>
+        <div className="mb-6 flex justify-center">
+          <BrandLogo to="/" variant="full" />
+        </div>
         <Card className="shadow-elegant">
           <CardHeader>
             <CardTitle>Welcome</CardTitle>
@@ -113,8 +120,19 @@ async function afterSignIn(navigate: ReturnType<typeof useNavigate>, user: {
   navigate({ to: dest, replace: true });
 }
 
+function fieldErrors(issues: { path: (string | number)[]; message: string }[]) {
+  const map: Record<string, string> = {};
+  for (const issue of issues) {
+    const key = String(issue.path[0] ?? "form");
+    if (!map[key]) map[key] = issue.message;
+  }
+  return map;
+}
+
 function LoginForm() {
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
   const navigate = useNavigate();
   return (
     <form
@@ -124,19 +142,37 @@ function LoginForm() {
         const fd = new FormData(e.currentTarget);
         const parsed = loginSchema.safeParse(Object.fromEntries(fd));
         if (!parsed.success) {
-          toast.error(parsed.error.issues[0].message);
+          setFormError(null);
+          setErrors(fieldErrors(parsed.error.issues));
           return;
         }
+        setErrors({});
+        setFormError(null);
         setLoading(true);
         const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
         setLoading(false);
-        if (error) return toast.error(error.message);
+        if (error) {
+          setFormError(error.message);
+          return;
+        }
         await afterSignIn(navigate, data.user ?? data.session?.user ?? null);
       }}
     >
       <div>
         <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" autoComplete="email" required />
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+          aria-invalid={Boolean(errors.email)}
+          onChange={() => {
+            setErrors((e) => ({ ...e, email: "" }));
+            setFormError(null);
+          }}
+        />
+        {errors.email && <p className="mt-1 text-xs text-destructive">{errors.email}</p>}
       </div>
       <div>
         <Label htmlFor="password">Password</Label>
@@ -146,9 +182,20 @@ function LoginForm() {
           type="password"
           autoComplete="current-password"
           required
+          aria-invalid={Boolean(errors.password)}
+          onChange={() => {
+            setErrors((e) => ({ ...e, password: "" }));
+            setFormError(null);
+          }}
         />
+        {errors.password && <p className="mt-1 text-xs text-destructive">{errors.password}</p>}
       </div>
-      <Button type="submit" className="w-full" disabled={loading}>
+      {formError && (
+        <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
+          {formError}
+        </p>
+      )}
+      <Button type="submit" className="w-full min-h-11" disabled={loading}>
         {loading ? "Signing in…" : "Sign in"}
       </Button>
       <div className="text-center text-sm">
@@ -162,6 +209,8 @@ function LoginForm() {
 
 function SignupForm({ onDone }: { onDone: () => void }) {
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
   const navigate = useNavigate();
   return (
     <form
@@ -171,9 +220,12 @@ function SignupForm({ onDone }: { onDone: () => void }) {
         const fd = new FormData(e.currentTarget);
         const parsed = signupSchema.safeParse(Object.fromEntries(fd));
         if (!parsed.success) {
-          toast.error(parsed.error.issues[0].message);
+          setFormError(null);
+          setErrors(fieldErrors(parsed.error.issues));
           return;
         }
+        setErrors({});
+        setFormError(null);
         setLoading(true);
         const { data, error } = await supabase.auth.signUp({
           email: parsed.data.email,
@@ -184,7 +236,10 @@ function SignupForm({ onDone }: { onDone: () => void }) {
           },
         });
         setLoading(false);
-        if (error) return toast.error(error.message);
+        if (error) {
+          setFormError(error.message);
+          return;
+        }
         // Local SQLite auto-logs in; Supabase may require email confirm
         if (data.session?.user) {
           await afterSignIn(navigate, data.session.user);
@@ -196,11 +251,34 @@ function SignupForm({ onDone }: { onDone: () => void }) {
     >
       <div>
         <Label htmlFor="full_name">Full name</Label>
-        <Input id="full_name" name="full_name" required maxLength={80} />
+        <Input
+          id="full_name"
+          name="full_name"
+          required
+          maxLength={80}
+          aria-invalid={Boolean(errors.full_name)}
+          onChange={() => {
+            setErrors((e) => ({ ...e, full_name: "" }));
+            setFormError(null);
+          }}
+        />
+        {errors.full_name && <p className="mt-1 text-xs text-destructive">{errors.full_name}</p>}
       </div>
       <div>
         <Label htmlFor="s-email">Email</Label>
-        <Input id="s-email" name="email" type="email" autoComplete="email" required />
+        <Input
+          id="s-email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+          aria-invalid={Boolean(errors.email)}
+          onChange={() => {
+            setErrors((e) => ({ ...e, email: "" }));
+            setFormError(null);
+          }}
+        />
+        {errors.email && <p className="mt-1 text-xs text-destructive">{errors.email}</p>}
       </div>
       <div>
         <Label htmlFor="s-password">Password (min 8 characters)</Label>
@@ -211,9 +289,20 @@ function SignupForm({ onDone }: { onDone: () => void }) {
           autoComplete="new-password"
           required
           minLength={8}
+          aria-invalid={Boolean(errors.password)}
+          onChange={() => {
+            setErrors((e) => ({ ...e, password: "" }));
+            setFormError(null);
+          }}
         />
+        {errors.password && <p className="mt-1 text-xs text-destructive">{errors.password}</p>}
       </div>
-      <Button type="submit" className="w-full" disabled={loading}>
+      {formError && (
+        <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
+          {formError}
+        </p>
+      )}
+      <Button type="submit" className="w-full min-h-11" disabled={loading}>
         {loading ? "Creating account…" : "Create account"}
       </Button>
       <p className="text-xs text-muted-foreground">
