@@ -3,6 +3,7 @@
  * Calls POST /api/analyze (server holds PERPLEXITY_API_KEY).
  */
 import type { AnalysisInput, AnalysisResult } from "./types";
+import { apiUrl } from "@/lib/mobile/env";
 
 export type { AnalysisInput, AnalysisResult } from "./types";
 export { trustLabel, trustColorVar, categoryFor } from "./types";
@@ -12,7 +13,7 @@ export async function analyzeContent(input: AnalysisInput): Promise<AnalysisResu
   const timer = setTimeout(() => controller.abort(), 90_000);
 
   try {
-    const res = await fetch("/api/analyze", {
+    const res = await fetch(apiUrl("/api/analyze"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
