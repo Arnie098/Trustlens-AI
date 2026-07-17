@@ -11,15 +11,12 @@ services:
     plan: free
     # Free web services are most reliable in oregon; change later if you prefer.
     region: oregon
-    # NODE_ENV=production makes plain `npm install` skip devDependencies (vite/nitro).
-    # --include=dev keeps the build toolchain available.
-    buildCommand: npm install --include=dev && npm run build
+    # Build tools live in dependencies so production npm install still has vite/nitro.
+    buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_VERSION
         value: "22.12.0"
-      # Do NOT set NODE_ENV here — it breaks npm install (skips devDependencies).
-      # Render sets production for the running service.
       - key: VITE_DB_PROVIDER
         value: supabase
       - key: VITE_SUPABASE_URL
