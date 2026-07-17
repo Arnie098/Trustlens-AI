@@ -40,8 +40,7 @@ function localApiPlugin(): Plugin {
             return;
           }
 
-          const provider =
-            process.env.VITE_DB_PROVIDER || process.env.DB_PROVIDER || "sqlite";
+          const provider = process.env.VITE_DB_PROVIDER || process.env.DB_PROVIDER || "sqlite";
           if (provider === "supabase") {
             next();
             return;
@@ -99,7 +98,11 @@ async function writeFetchResponse(res: ServerResponse, response: Response): Prom
 
 // Load all .env keys into process.env so server APIs can read PERPLEXITY_API_KEY
 // (Vite only exposes VITE_* to the browser by design).
-const env = loadEnv(process.env.NODE_ENV === "production" ? "production" : "development", process.cwd(), "");
+const env = loadEnv(
+  process.env.NODE_ENV === "production" ? "production" : "development",
+  process.cwd(),
+  "",
+);
 for (const [key, value] of Object.entries(env)) {
   if (process.env[key] === undefined) process.env[key] = value;
 }
@@ -111,18 +114,44 @@ const dbProvider =
 const useSupabase = dbProvider === "supabase";
 const sqliteAlias = useSupabase ? { "node:sqlite": SQLITE_STUB } : {};
 
+// Mobile (Capacitor) needs a STATIC index.html to bundle into mobile/www — the
+// default SSR/Nitro build only emits assets + a server entry. When MOBILE_SPA=1
+// (set by scripts/sync-mobile.mjs), enable TanStack Start SPA mode so the shell
+// is prerendered to a static index.html and the app runs fully client-side inside
+// the WebView.
+//
+// SPA prerender boots TanStack Start's own preview server, which loads the server
+// build from dist/server/server.js. Nitro's node-server preset repackages output
+// to .output/ instead, so prerender + Nitro do not compose. For the mobile build
+// we therefore DISABLE Nitro (nitro: false) — we only need static client assets +
+// the prerendered shell, not a deployable server. The Render/production SSR path
+// never sets MOBILE_SPA, so it keeps the node-server preset untouched.
+const mobileSpa = process.env.MOBILE_SPA === "1";
+const tanstackStartOptions: Record<string, unknown> = {
+  // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
+  server: { entry: "server" },
+  ...(mobileSpa
+    ? {
+        spa: {
+          enabled: true,
+          prerender: { enabled: true, crawlLinks: false },
+        },
+      }
+    : {}),
+};
+
+const nitroConfig = mobileSpa
+  ? false
+  : {
+      // Render (and local Node hosting) need a Node listener, not Cloudflare Workers.
+      // Override Lovable's defaultPreset of cloudflare-module.
+      preset: "node-server",
+      alias: sqliteAlias,
+    };
+
 export default defineLovableConfig({
-  // Render (and local Node hosting) need a Node listener, not Cloudflare Workers.
-  // Override Lovable's defaultPreset of cloudflare-module.
-  nitro: {
-    preset: "node-server",
-    alias: sqliteAlias,
-  },
-  tanstackStart: {
-    // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
-    // nitro/vite builds from this
-    server: { entry: "server" },
-  },
+  nitro: nitroConfig,
+  tanstackStart: tanstackStartOptions,
   vite: {
     plugins: [localApiPlugin()],
     resolve: {

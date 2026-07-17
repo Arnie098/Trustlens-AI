@@ -14,7 +14,10 @@
     "db:init": "node scripts/init-sqlite.mjs",
     "db:reset": "node scripts/init-sqlite.mjs --reset",
     "test:supabase": "node scripts/test-supabase.mjs",
-    "seed:learn": "node scripts/seed-learning-supabase.mjs"
+    "seed:learn": "node scripts/seed-learning-supabase.mjs",
+    "mobile:sync": "node scripts/sync-mobile.mjs",
+    "mobile:sync:cap": "node scripts/sync-mobile.mjs --cap-sync",
+    "mobile:android": "npm run mobile:sync:cap && npm --prefix mobile run open:android"
   },
   "engines": {
     "node": ">=22.13.0"
