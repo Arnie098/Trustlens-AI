@@ -5,9 +5,12 @@
 //     React/TanStack dedupe, error logger plugins, and sandbox detection (port/host/strictPort).
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv } from "vite";
 import { defineConfig as defineLovableConfig } from "@lovable.dev/vite-tanstack-config";
 import type { Plugin } from "vite";
+
+const SQLITE_STUB = fileURLToPath(new URL("./src/lib/sqlite/sqlite-stub.ts", import.meta.url));
 
 /**
  * Serves /api/analyze and /api/local/* from the Vite dev server.
@@ -95,11 +98,19 @@ for (const [key, value] of Object.entries(env)) {
   if (process.env[key] === undefined) process.env[key] = value;
 }
 
+// Supabase deploys (Render) must not touch Node's experimental `node:sqlite`.
+// Alias it to a stub so Vite/Nitro can build on hosts without that builtin.
+const dbProvider =
+  process.env.VITE_DB_PROVIDER || process.env.DB_PROVIDER || env.VITE_DB_PROVIDER || "sqlite";
+const useSupabase = dbProvider === "supabase";
+const sqliteAlias = useSupabase ? { "node:sqlite": SQLITE_STUB } : {};
+
 export default defineLovableConfig({
   // Render (and local Node hosting) need a Node listener, not Cloudflare Workers.
   // Override Lovable's defaultPreset of cloudflare-module.
   nitro: {
     preset: "node-server",
+    alias: sqliteAlias,
   },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
@@ -108,9 +119,16 @@ export default defineLovableConfig({
   },
   vite: {
     plugins: [localApiPlugin()],
-    // Keep node:sqlite and server modules out of the browser bundle
+    resolve: {
+      alias: sqliteAlias,
+    },
+    // Keep node builtins out of the browser bundle. On Supabase builds, do NOT
+    // externalize node:sqlite — resolve the stub instead (external would still
+    // try to load a missing builtin on older Node and fail the build).
     ssr: {
-      external: ["node:sqlite", "node:fs", "node:path", "node:crypto", "node:url"],
+      external: useSupabase
+        ? ["node:fs", "node:path", "node:crypto", "node:url"]
+        : ["node:sqlite", "node:fs", "node:path", "node:crypto", "node:url"],
     },
   },
 });

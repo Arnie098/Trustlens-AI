@@ -17,7 +17,7 @@
     "seed:learn": "node scripts/seed-learning-supabase.mjs"
   },
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=22.13.0"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
