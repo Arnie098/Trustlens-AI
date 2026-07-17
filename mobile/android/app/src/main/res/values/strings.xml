@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TrustLensAI</string>
+    <string name="title_activity_main">TrustLensAI</string>
+    <string name="package_name">ai.trustlens.app</string>
+    <string name="custom_url_scheme">ai.trustlens.app</string>
+</resources>

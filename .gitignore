@@ -41,3 +41,19 @@ data/_last_analyze.json
 *.njsproj
 *.sln
 *.sw?
+
+# Mobile (Capacitor)
+# www/ is a generated web build; the native android/ SOURCE is committed for
+# reproducible builds, but its local build artifacts are ignored here + in
+# mobile/.gitignore.
+mobile/www/
+mobile/node_modules/
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/capacitor-cordova-android-plugins/
+mobile/android/app/src/main/assets/public/
+mobile/android/app/src/main/assets/capacitor.config.json
+mobile/android/local.properties
+mobile/*.apk
+mobile/*.aab

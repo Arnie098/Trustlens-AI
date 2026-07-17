@@ -1,0 +1,25 @@
+{
+  "name": "trustlens-mobile",
+  "private": true,
+  "version": "0.1.0",
+  "description": "TrustLensAI Capacitor shell — see docs/superpowers/specs/2026-07-17-mobile-capacitor-scanner-overlay-design.md",
+  "scripts": {
+    "sync": "npx cap sync",
+    "open:android": "npx cap open android",
+    "copy": "npx cap copy",
+    "add:android": "npx cap add android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/camera": "^7.0.0",
+    "@capacitor/clipboard": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/splash-screen": "^7.0.0",
+    "@capacitor/status-bar": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
+    "typescript": "^5.8.3"
+  }
+}
