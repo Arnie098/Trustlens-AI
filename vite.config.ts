@@ -96,6 +96,11 @@ for (const [key, value] of Object.entries(env)) {
 }
 
 export default defineLovableConfig({
+  // Render (and local Node hosting) need a Node listener, not Cloudflare Workers.
+  // Override Lovable's defaultPreset of cloudflare-module.
+  nitro: {
+    preset: "node-server",
+  },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this

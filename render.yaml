@@ -1,0 +1,40 @@
+# Render Blueprint — shared staging for other devs (not hard production).
+# After deploy: add your onrender.com URL to Supabase Auth → URL Configuration
+# (Site URL + Redirect URLs).
+#
+# AI: uses Perplexity website session cookies (same as local free mode).
+# In the Render dashboard, set PERPLEXITY_COOKIES to the full Cookie header
+# value from data/perplexity-cookies.txt (do NOT commit that file).
+
+services:
+  - type: web
+    name: trustlens-ai
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "22.12.0"
+      - key: NODE_ENV
+        value: production
+      # Hosted Supabase (do not use sqlite on Render's ephemeral disk)
+      - key: VITE_DB_PROVIDER
+        value: supabase
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Shared-staging AI: cookie session (paste from local data/perplexity-cookies.txt)
+      - key: PERPLEXITY_PREFER_COOKIES
+        value: "1"
+      - key: PERPLEXITY_COOKIES
+        sync: false

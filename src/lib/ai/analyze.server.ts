@@ -36,8 +36,26 @@ function stripInternalNotes(text: string | undefined): string {
     .trim();
 }
 
+function preferCookieSession(): boolean {
+  const flag = process.env.PERPLEXITY_PREFER_COOKIES?.trim().toLowerCase();
+  return flag === "1" || flag === "true" || flag === "yes";
+}
+
 export async function analyzeContentServer(input: AnalysisInput): Promise<AnalysisResult> {
-  // 1) Official API
+  // Shared staging (e.g. Render free preview): prefer website session cookies first.
+  // Production should leave PERPLEXITY_PREFER_COOKIES unset and use PERPLEXITY_API_KEY.
+  const tryCookieFirst = preferCookieSession() && hasPerplexityCookies();
+
+  if (tryCookieFirst) {
+    try {
+      return asPublicResult(await perplexityCookieAnalyze(input), "perplexity");
+    } catch (err) {
+      console.error("[analyze] Cookie session path failed:", err);
+      // fall through to API / mock
+    }
+  }
+
+  // Official API
   if (hasPerplexityKey()) {
     try {
       return asPublicResult(await perplexityAnalyze(input), "perplexity");
@@ -47,8 +65,8 @@ export async function analyzeContentServer(input: AnalysisInput): Promise<Analys
     }
   }
 
-  // 2) Local session bridge (implementation detail — not exposed)
-  if (hasPerplexityCookies()) {
+  // Cookie session (when not already tried above)
+  if (!tryCookieFirst && hasPerplexityCookies()) {
     try {
       return asPublicResult(await perplexityCookieAnalyze(input), "perplexity");
     } catch (err) {
@@ -65,7 +83,7 @@ export async function analyzeContentServer(input: AnalysisInput): Promise<Analys
     }
   }
 
-  // 3) Mock
+  // Mock
   return asPublicResult(await mockAnalyze(input), "mock");
 }
 

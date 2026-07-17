@@ -10,7 +10,7 @@ import { supabase } from "@/lib/db";
 import { useSession } from "@/lib/auth/session";
 import { homePathForUser } from "@/lib/auth/redirect";
 import { toast } from "sonner";
-import { Shield, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 
 const searchSchema = z.object({ mode: z.enum(["login", "signup"]).optional() });
 
@@ -73,22 +73,17 @@ function AuthPage() {
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               <DemoLoginButton
-                label="Learner demo"
+                label="User Demo"
                 email="learner@trustlensai.app"
                 password="demo-trustlens-2026"
-                hint="User app"
               />
               <DemoLoginButton
-                label="Admin demo"
+                label="Admin Demo"
                 email="admin@trustlensai.app"
                 password="demo-trustlens-2026"
-                hint="Admin console"
                 admin
               />
             </div>
-            <p className="mt-3 text-center text-[11px] text-muted-foreground">
-              Password for both demos: <code className="rounded bg-muted px-1">demo-trustlens-2026</code>
-            </p>
           </CardContent>
         </Card>
         <p className="mt-6 text-center text-xs text-navy-foreground/80">
@@ -233,13 +228,11 @@ function DemoLoginButton({
   label,
   email,
   password,
-  hint,
   admin,
 }: {
   label: string;
   email: string;
   password: string;
-  hint: string;
   admin?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
@@ -272,9 +265,7 @@ function DemoLoginButton({
         await afterSignIn(navigate, data.user ?? data.session?.user ?? null);
       }}
     >
-      {admin ? <Shield className="mr-2 h-4 w-4" /> : null}
       {loading ? "Signing in…" : label}
-      <span className="ml-1 text-[10px] opacity-70">({hint})</span>
     </Button>
   );
 }
