@@ -1,0 +1,307 @@
+{
+  "spot-misleading-headlines": {
+    "title": "Course: Spotting Misleading Headlines",
+    "description": "A practical course on decoding clickbait, missing context, and emotional framing before you click or share.",
+    "category": "Media Literacy",
+    "difficulty": "beginner",
+    "estimated_minutes": 45,
+    "lessons": [
+      {
+        "title": "1. Course orientation",
+        "body": "## Welcome to ML-101\n\nIn this course you will practice reading headlines the way a careful editor does: as claims to test, not facts to absorb.\n\n## Learning goals\n\n- Spot emotional and absolute language\n- Check whether the article body supports the headline\n- Build a 60-second verification habit\n\n## How the course works\n\nEach unit includes a short reading, examples, and a key takeaway. At the end, a short quiz checks that you can apply the skills—not just memorize definitions.\n\n## Time estimate\n\nAbout 45 minutes including the quiz. You can pause anytime; progress is saved when you mark a unit complete."
+      },
+      {
+        "title": "2. Why headlines mislead",
+        "body": "## Attention economics\n\nHeadlines compete for clicks. That pressure rewards emotional, incomplete, or exaggerated framing—even when the article body is more careful.\n\n## Common patterns\n\n- ALL CAPS, exclamation points, or words like \"shocking\", \"unbelievable\", \"they don't want you to know\"\n- Absolute claims with no source: \"Scientists prove…\", \"Everyone is saying…\"\n- Missing who / when / where — the classic context gap\n- Questions that imply scandal without stating a verifiable fact\n\n## Mini exercise\n\nOpen a news app and list three headlines. For each, write one concrete fact the headline actually asserts. If you cannot, mark it \"weak claim.\"\n\n## Key takeaway\n\nTreat the headline as a claim to check — not as proof."
+      },
+      {
+        "title": "3. Headline vs. body mismatch",
+        "body": "## The bait-and-switch\n\nSome pieces use a dramatic headline, then bury nuance in paragraph eight. Readers who only skim the headline still share the exaggerated version.\n\n## What to check in the body\n\n- Does it name a specific study, date, or official source?\n- Are quotes complete or cut mid-sentence?\n- Is language in the body more hedged (\"may\", \"suggests\", \"small sample\") than the headline?\n\n## Worked example (fictional)\n\nHeadline: \"Miracle herb CURES disease overnight!!!\"\nBody: \"A 12-person pilot study found modest symptom improvement over four weeks; more research needed.\"\n\nMismatch: headline overclaims; body is cautious.\n\n## Key takeaway\n\nIf the body is more careful than the headline, share the careful version—or don't share yet."
+      },
+      {
+        "title": "4. The 60-second checklist",
+        "body": "## Run this every time\n\n1. Who published this? Corrections policy and bylines?\n2. Does the headline name a person, study, place, or date?\n3. Can you remove emotional words and still have a concrete claim?\n4. Do two independent reputable outlets report the same core fact?\n5. Is this labeled opinion/analysis but styled as hard news?\n\n## Scoring yourself\n\n- 4–5 yes → lower risk, still verify if stakes are high\n- 2–3 yes → needs verification\n- 0–1 yes → treat as potentially misleading until proven otherwise\n\n## Key takeaway\n\nSpeed is optional; a one-minute check is not."
+      },
+      {
+        "title": "5. Practice & next steps",
+        "body": "## Capstone practice\n\nFind one viral headline today. Apply the checklist. Write two sentences: (1) what the headline claims, (2) what evidence you found.\n\n## Tools that help\n\n- TrustLensAI for a second pass of signals\n- Reverse search for related images\n- Official sites and wire services for confirmation\n\n## Before the quiz\n\nYou should be able to name three red-flag patterns and describe the 60-second checklist from memory.\n\n## Remember\n\nTrustLens scores are educational signals, not final verdicts."
+      }
+    ],
+    "questions": [
+      {
+        "question": "Which is a red flag in a headline?",
+        "options": ["States clear facts with named sources", "Uses ALL CAPS and emotional words", "Includes a publication date", "Links to a primary study"],
+        "correct_index": 1,
+        "explanation": "Emotional language and all-caps often signal clickbait rather than careful reporting."
+      },
+      {
+        "question": "A good first step when a headline makes you angry is to:",
+        "options": ["Share it immediately so others know", "Read the full article and check sources", "Trust the first comment you see", "Ignore all news forever"],
+        "correct_index": 1,
+        "explanation": "Slow down, read past the headline, and look for independent confirmation."
+      },
+      {
+        "question": "If removing emotional words leaves almost no concrete claim, the headline is likely:",
+        "options": ["Highly trustworthy", "Carefully peer-reviewed", "Weak or misleading", "Always illegal"],
+        "correct_index": 2,
+        "explanation": "Strong feelings without specifics are a classic misleading pattern."
+      },
+      {
+        "question": "Headline–body mismatch means:",
+        "options": ["The site is always reliable", "The headline overstates what the article actually supports", "You should only read headlines", "Citations are illegal"],
+        "correct_index": 1,
+        "explanation": "When the body is more careful than the headline, the headline is often the misleading part."
+      },
+      {
+        "question": "How many independent reputable outlets should ideally confirm a surprising claim before you share?",
+        "options": ["Zero — trust your gut", "At least two", "Exactly one influencer", "Only anonymous blogs"],
+        "correct_index": 1,
+        "explanation": "Triangulating across independent sources reduces the risk of being misled."
+      }
+    ]
+  },
+  "verify-images-videos": {
+    "title": "Course: Verifying Images & Video",
+    "description": "Trace photos and clips to their original context using reverse search, landmarks, and careful provenance checks.",
+    "category": "Verification",
+    "difficulty": "intermediate",
+    "estimated_minutes": 55,
+    "lessons": [
+      {
+        "title": "1. Course orientation",
+        "body": "## Welcome to VF-201\n\nVisual media is powerful because it feels like proof. This course teaches you to test that feeling.\n\n## Learning goals\n\n- Detect out-of-context reuse of real photos\n- Use reverse image search effectively\n- Spot common deepfake/edit signals without overconfidenceing them\n\n## Tools you may use\n\nBrowser reverse search, maps for landmarks, and reputable news archives. No paid tools required."
+      },
+      {
+        "title": "2. Images can lie without editing",
+        "body": "## Real photo, wrong story\n\nA genuine photograph can still mislead if paired with the wrong caption, date, or place. This is more common than elaborate forgeries.\n\n## Red flags\n\n- Dramatic claim with a stock-looking image\n- No photographer credit or original post\n- \"Forwarded many times\" messaging screenshots\n- Video clips with no full context or original upload date\n\n## Key takeaway\n\nAlways ask: is this media from the event being described?"
+      },
+      {
+        "title": "3. Reverse image search workflow",
+        "body": "## Practical techniques\n\n1. Reverse image search (Google Images, TinEye, Yandex) to find earlier appearances\n2. Check whether the first known use matches the claim's date and location\n3. Look for EXIF/metadata when available (often stripped on social platforms)\n4. For video: search distinctive phrases, signs, or landmarks in the frame\n5. Prefer primary sources (official accounts, wire services, original livestreams)\n\n## Worked example\n\nFlood photo labeled \"today in City A\" reverse-searches to a three-year-old event in City B. Image real; caption false.\n\n## Key takeaway\n\nProvenance beats vibes: find the earliest trustworthy appearance."
+      },
+      {
+        "title": "4. Deepfakes and heavy edits",
+        "body": "## Imperfect visual signals\n\n- Warped hands, teeth, jewelry, or small text\n- Inconsistent shadows or reflections\n- Melted backgrounds; odd morphing at edges\n- Mismatched lip-sync or lighting in video\n\n## Limits of detection\n\nHuman eyes and automated detectors both err. Treat \"looks AI\" as a prompt to investigate, not courtroom proof.\n\n## When stakes are high\n\nSeek corroboration from reputable outlets and original uploads before acting or resharing.\n\n## Key takeaway\n\nCombine visual checks with independent reporting."
+      },
+      {
+        "title": "5. Capstone lab",
+        "body": "## Practice assignment\n\n1. Save one viral image from your feed\n2. Reverse search it and note the earliest credible source\n3. Write whether the caption matches that source\n4. List one next step if you are still unsure\n\n## Ready for the quiz\n\nYou should be able to explain out-of-context reuse, reverse search steps, and why detectors alone are not enough."
+      }
+    ],
+    "questions": [
+      {
+        "question": "A real photo can still mislead when it is:",
+        "options": ["Taken in daylight", "Shown with the wrong date or location caption", "Published by a wire service", "Saved as JPEG"],
+        "correct_index": 1,
+        "explanation": "Out-of-context reuse is one of the most common image deceptions."
+      },
+      {
+        "question": "Reverse image search is mainly used to:",
+        "options": ["Improve photo resolution", "Find earlier appearances of the same image", "Delete the original post", "Translate text in images"],
+        "correct_index": 1,
+        "explanation": "It helps establish provenance and whether the caption matches the original context."
+      },
+      {
+        "question": "Warped hands or melted backgrounds may indicate:",
+        "options": ["Perfect camera focus", "Possible AI generation or heavy editing", "That the photo is automatically true", "Nothing useful"],
+        "correct_index": 1,
+        "explanation": "These are imperfect signals that warrant further checks, not automatic proof."
+      },
+      {
+        "question": "EXIF metadata on social platforms is often:",
+        "options": ["Always complete", "Stripped or incomplete", "Proof of truth", "Illegal to view"],
+        "correct_index": 1,
+        "explanation": "Many platforms remove metadata, so absence of EXIF is common and not decisive alone."
+      },
+      {
+        "question": "When visual stakes are high, you should prioritize:",
+        "options": ["Only gut feeling", "Independent reputable corroboration", "The most shared meme", "Anonymous screenshots only"],
+        "correct_index": 1,
+        "explanation": "Corroboration from trusted independent sources reduces error risk."
+      }
+    ]
+  },
+  "understanding-ai-content": {
+    "title": "Course: Understanding AI-Generated Content",
+    "description": "Learn where generative AI appears online, what signals to watch for, and how to use AI checkers responsibly.",
+    "category": "AI Literacy",
+    "difficulty": "intermediate",
+    "estimated_minutes": 50,
+    "lessons": [
+      {
+        "title": "1. Course orientation",
+        "body": "## Welcome to AI-210\n\nGenerative AI makes fluent text and persuasive images cheap to produce. This course builds practical AI literacy for everyday verification.\n\n## Learning goals\n\n- Map where AI content shows up\n- Use imperfect signals without false certainty\n- Treat AI tools as assistants, not authorities"
+      },
+      {
+        "title": "2. The AI content landscape",
+        "body": "## Common surfaces\n\n- Social posts and comment spam\n- Thin \"news-like\" rewrites\n- Synthetic profile and product photos\n- Fabricated quotes and political memes\n\n## Why volume matters\n\nAI reduces production cost. Engagement systems still reward emotion and novelty, so low-quality content can flood attention.\n\n## Key takeaway\n\nFluency is not truthfulness."
+      },
+      {
+        "title": "3. Signals in AI text",
+        "body": "## Imperfect text signals\n\n- Generic, balanced prose with no concrete details\n- Invented citations or dead links\n- Overconfident claims without primary sources\n- Style that shifts abruptly mid-thread\n\n## Counterexamples\n\nHuman writing can be generic; AI can be specific. Signals are prompts to investigate, not automatic labels.\n\n## Key takeaway\n\nDemand sources you can open and check yourself."
+      },
+      {
+        "title": "4. Signals in AI images & media",
+        "body": "## Imperfect visual signals\n\n- Distorted hands, teeth, jewelry, or small text\n- Inconsistent shadows or reflections\n- Backgrounds that melt at edges\n\n## Audio/video\n\nWatch for lip-sync issues and too-clean audio for the setting. Again: imperfect signals only.\n\n## Key takeaway\n\nCombine visual suspicion with independent reporting."
+      },
+      {
+        "title": "5. Using TrustLensAI responsibly",
+        "body": "## What TrustLensAI is for\n\nIt surfaces media-literacy signals and next steps. It can be wrong, incomplete, or biased.\n\n## Good practice\n\n- Never treat a score as legal or scientific proof\n- Prefer primary documents and multiple outlets\n- Disclose uncertainty when you share analysis\n\n## Capstone\n\nTake one AI-suspicious post and write: (1) two signals you noticed, (2) two sources you would check, (3) whether you would share yet.\n\n## Key takeaway\n\nAI can assist judgment; it should not replace it."
+      }
+    ],
+    "questions": [
+      {
+        "question": "Fluent, confident writing automatically means the content is true.",
+        "options": ["True", "False", "Only on social media", "Only for science topics"],
+        "correct_index": 1,
+        "explanation": "AI and humans can both produce fluent falsehoods. Fluency is not evidence."
+      },
+      {
+        "question": "A better response to suspected AI misinformation is to:",
+        "options": ["Repost it with laughing emojis", "Demand primary sources and corroboration", "Assume detectors are always correct", "Ban all AI tools"],
+        "correct_index": 1,
+        "explanation": "Seek independent sources and primary documents; detection tools have limits."
+      },
+      {
+        "question": "Invented citations that do not resolve are a signal of:",
+        "options": ["Strong scholarship", "Possible low-quality or AI-generated text", "Guaranteed human authorship", "Government approval"],
+        "correct_index": 1,
+        "explanation": "Fake references are a known failure mode of generative text systems."
+      },
+      {
+        "question": "TrustLensAI scores should be treated as:",
+        "options": ["Final court verdicts", "Educational signals needing human judgment", "Proof of authorship", "Guaranteed truth"],
+        "correct_index": 1,
+        "explanation": "Scores support literacy; they do not replace independent verification."
+      },
+      {
+        "question": "Why does AI-generated content spread quickly?",
+        "options": ["It is always accurate", "It is cheap to produce at high volume and often emotional", "Platforms ban verification", "It cannot be screenshotted"],
+        "correct_index": 1,
+        "explanation": "Low production cost plus engagement incentives amplify volume."
+      }
+    ]
+  },
+  "source-credibility": {
+    "title": "Course: Source Credibility Essentials",
+    "description": "Evaluate publishers, authors, citations, and evidence trails the way careful researchers do.",
+    "category": "Media Literacy",
+    "difficulty": "beginner",
+    "estimated_minutes": 50,
+    "lessons": [
+      {
+        "title": "1. Course orientation",
+        "body": "## Welcome to SC-120\n\nNot every source is equal. This course builds a simple system for ranking credibility without cynicism.\n\n## Learning goals\n\n- Assess outlet transparency\n- Follow citations to primary evidence\n- Compare framing across independent sources"
+      },
+      {
+        "title": "2. Who is speaking?",
+        "body": "## Questions that matter\n\n- Who owns or funds the publisher?\n- Is there a named author with relevant expertise?\n- Does the site publish corrections and contact information?\n- Are claims linked to primary documents?\n\n## Generally stronger\n\nWire services, peer-reviewed journals, official statistical agencies, outlets with clear editorial standards.\n\n## Generally weaker\n\nAnonymous blogs, pure virality, document dumps with no chain of custody, outrage-only sites.\n\n## Key takeaway\n\nAuthority is earned through transparency and track record—not design polish alone."
+      },
+      {
+        "title": "3. Following the evidence trail",
+        "body": "## Checklist\n\n1. Follow links — do they support the claim?\n2. Prefer primary sources over nested screenshots\n3. Note publication and update dates\n4. Watch for outdated studies presented as current\n5. Spot single-source stories major outlets are not covering\n\n## \"Study says\" claims\n\nFind the original paper. Note sample size, funding, and limitations. Summaries often overstate results.\n\n## Key takeaway\n\nA citation is useful only if you can verify what it says."
+      },
+      {
+        "title": "4. Bias without conspiracy",
+        "body": "## Framing bias\n\nEven serious outlets choose stories and words carefully. Bias ≠ automatic fabrication, but it means you should compare frames.\n\n## Healthy habits\n\n- Read across the spectrum for major claims\n- Separate facts (who/what/when) from interpretation\n- Be extra careful when a story perfectly confirms your beliefs\n\n## Key takeaway\n\nSeek disconfirming evidence on purpose."
+      },
+      {
+        "title": "5. Capstone evaluation",
+        "body": "## Assignment\n\nPick one article. Score it 1–5 on: transparency, primary evidence, independence, and update hygiene. Write a three-sentence credibility brief.\n\n## Ready for the quiz\n\nYou should explain outlet transparency, primary sources, and why cross-checking frames matters."
+      }
+    ],
+    "questions": [
+      {
+        "question": "A transparent news outlet typically provides:",
+        "options": ["Only anonymous posts", "Bylines, contact info, and correction practices", "No dates", "Unlimited ads only"],
+        "correct_index": 1,
+        "explanation": "Transparency about who wrote and how errors are fixed builds accountability."
+      },
+      {
+        "question": "When a post says \"a study proves\", you should first:",
+        "options": ["Share the summary", "Find and skim the original study or official summary", "Trust the meme format", "Count the likes"],
+        "correct_index": 1,
+        "explanation": "Media summaries often overstate findings; check the primary source."
+      },
+      {
+        "question": "Comparing coverage across independent outlets helps you detect:",
+        "options": ["Wi-Fi passwords", "Framing differences and unsupported claims", "Printer ink levels", "Battery health"],
+        "correct_index": 1,
+        "explanation": "Cross-checking reduces reliance on a single frame or error."
+      },
+      {
+        "question": "Which is generally a stronger source type?",
+        "options": ["Anonymous Telegram dump only", "Peer-reviewed journal or official statistics agency", "Unsourced viral meme", "Screenshot of a screenshot of a tweet"],
+        "correct_index": 1,
+        "explanation": "Primary, accountable sources with methods and corrections are stronger."
+      },
+      {
+        "question": "Bias in mainstream outlets means:",
+        "options": ["Everything they publish is false", "You should still check framing and seek other sources", "You must never read them", "Citations are unnecessary"],
+        "correct_index": 1,
+        "explanation": "Framing bias is real; it calls for comparison, not total dismissal."
+      }
+    ]
+  },
+  "think-before-sharing": {
+    "title": "Course: Think Before You Share",
+    "description": "Build pause habits that reduce the spread of misleading content in your networks.",
+    "category": "Digital Citizenship",
+    "difficulty": "beginner",
+    "estimated_minutes": 40,
+    "lessons": [
+      {
+        "title": "1. Course orientation",
+        "body": "## Welcome to BH-105\n\nMost people are not malicious—they are busy. This course builds small habits that stop harm at the share button.\n\n## Learning goals\n\n- Understand why speed spreads falsehoods\n- Use a five-question pause routine\n- Correct mistakes without shame spirals"
+      },
+      {
+        "title": "2. Why speed spreads harm",
+        "body": "## The impulse\n\nOutrage, fear, and novelty push \"share\" before \"check.\" Platforms amplify engagement, not accuracy.\n\n## Network trust\n\nYour friends may trust you more than a distant outlet. Your share is a recommendation.\n\n## Key takeaway\n\nA quick share can outrun a slow correction."
+      },
+      {
+        "title": "3. The five-question pause",
+        "body": "## Ask before you forward\n\n1. What emotion is this trying to create?\n2. Can I name the original source?\n3. Have two independent reputable outlets confirmed it?\n4. What if this is false—what's the cost?\n5. Am I informing or venting?\n\n## If you cannot answer\n\nSave the link. Verify. Decide later.\n\n## Key takeaway\n\nTwo minutes of pause beats two days of cleanup."
+      },
+      {
+        "title": "4. Correcting gracefully",
+        "body": "## If you shared something wrong\n\n- Correct in the same thread when possible\n- Link a better source without shaming people who trusted you\n- Model the behavior you want in your community\n\n## Culture building\n\nPraise careful checking. Ask \"source?\" kindly. Use TrustLensAI as a conversation starter, not a gavel.\n\n## Key takeaway\n\nHumility is a media-literacy skill."
+      },
+      {
+        "title": "5. Personal action plan",
+        "body": "## Write your rules\n\nCreate three personal rules (examples):\n- No shares from headlines alone\n- No health claims without a primary source\n- Always reverse-search shocking images\n\n## Capstone\n\nFor 24 hours, apply the pause routine to every share impulse. Journal one save you made by not sharing.\n\n## Ready for the quiz\n\nYou should recite the five questions and explain why your share is a recommendation."
+      }
+    ],
+    "questions": [
+      {
+        "question": "Your share is best thought of as:",
+        "options": ["Harmless noise", "A recommendation to your network", "Proof the claim is true", "Required by platforms"],
+        "correct_index": 1,
+        "explanation": "People often trust you more than the original poster — share carefully."
+      },
+      {
+        "question": "A useful pause question is:",
+        "options": ["How angry am I and who benefits if I share this uncritically?", "How can I get more likes?", "Which filter looks best?", "How do I mute corrections?"],
+        "correct_index": 0,
+        "explanation": "Noticing emotion and incentives reduces impulsive resharing."
+      },
+      {
+        "question": "If you shared something false, a responsible step is to:",
+        "options": ["Delete silently and hope no one noticed", "Correct in the same place and link a better source", "Double down", "Blame the algorithm only"],
+        "correct_index": 1,
+        "explanation": "Clear corrections in the same thread reduce ongoing harm."
+      },
+      {
+        "question": "Platforms primarily amplify content that:",
+        "options": ["Is always accurate", "Drives engagement (often emotional)", "Has peer review", "Is peer-approved by scientists only"],
+        "correct_index": 1,
+        "explanation": "Engagement incentives can favor speed and emotion over accuracy."
+      },
+      {
+        "question": "The best default when you cannot verify a surprising claim is:",
+        "options": ["Share anyway with \"interesting if true\"", "Wait, verify, then decide", "Insult people who ask for sources", "Post it in more groups"],
+        "correct_index": 1,
+        "explanation": "Delaying a share is low-cost; spreading falsehoods is not."
+      }
+    ]
+  }
+}
