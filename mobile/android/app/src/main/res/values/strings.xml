@@ -1,7 +1,5 @@
-<?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">TrustLensAI</string>
-    <string name="title_activity_main">TrustLensAI</string>
-    <string name="package_name">ai.trustlens.app</string>
-    <string name="custom_url_scheme">ai.trustlens.app</string>
+  <string name="app_name">TrustLensAI</string>
+  <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
+  <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
 </resources>

@@ -1,5 +1,15 @@
 # TrustLens Mobile (Capacitor) — Implementation Plan
 
+> **SUPERSEDED (2026-07-18).** Do **not** implement this Capacitor plan.  
+> Use instead:  
+> - Design: `docs/superpowers/specs/2026-07-18-mobile-expo-react-native-design.md`  
+> - Plan: `docs/superpowers/plans/2026-07-18-mobile-expo-react-native.md`  
+> Direction change: **React Native + Expo from scratch**, not Capacitor WebView shell.
+
+---
+
+# (Archived) TrustLens Mobile (Capacitor) — Implementation Plan
+
 > **For agentic workers (Claude, Grok, etc.):** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
 > **Read first:** `docs/superpowers/specs/2026-07-17-mobile-capacitor-scanner-overlay-design.md`  

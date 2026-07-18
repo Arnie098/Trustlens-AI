@@ -1,9 +1,10 @@
 # TrustLens Mobile — Capacitor Shell, Camera Scanner & Floating Verify Assist
 
 **Date:** 2026-07-17  
-**Status:** Draft for review  
+**Status:** SUPERSEDED (2026-07-18) — do not implement  
+**Replaced by:** `docs/superpowers/specs/2026-07-18-mobile-expo-react-native-design.md`  
 **Product:** TrustLensAI (UNESCO Youth Hackathon 2026)  
-**Parent approach:** Approach A — Capacitor shell over the existing web build  
+**Parent approach:** ~~Approach A — Capacitor shell~~ → **changed to Expo + React Native from scratch**  
 
 ---
 
