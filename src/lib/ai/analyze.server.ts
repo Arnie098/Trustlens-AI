@@ -9,6 +9,7 @@
 import { mockAnalyze } from "./mock-analyze";
 import { hasPerplexityKey, perplexityAnalyze } from "./perplexity";
 import { hasPerplexityCookies, perplexityCookieAnalyze } from "./perplexity-cookie";
+import { sanitizeAnalysisProse, sanitizeDisplayList } from "./sanitize-text";
 import type { AnalysisInput, AnalysisResult } from "./types";
 
 /** What the browser / API clients are allowed to see. */
@@ -18,10 +19,17 @@ function asPublicResult(result: AnalysisResult, provider: PublicProvider): Analy
   return {
     ...result,
     provider,
-    // Never leak internal transport notes into stored/displayed summary text
-    summary: stripInternalNotes(result.summary),
-    source_assessment: stripInternalNotes(result.source_assessment),
-    context_analysis: stripInternalNotes(result.context_analysis),
+    // Never leak internal transport notes or raw JSON blobs into stored/displayed fields
+    summary: stripInternalNotes(sanitizeAnalysisProse(result.summary, "summary")),
+    source_assessment: stripInternalNotes(
+      sanitizeAnalysisProse(result.source_assessment, "source_assessment"),
+    ),
+    context_analysis: stripInternalNotes(
+      sanitizeAnalysisProse(result.context_analysis, "context_analysis"),
+    ),
+    concerns: sanitizeDisplayList(result.concerns),
+    evidence: sanitizeDisplayList(result.evidence),
+    next_steps: sanitizeDisplayList(result.next_steps),
   };
 }
 

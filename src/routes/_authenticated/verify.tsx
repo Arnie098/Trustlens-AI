@@ -236,10 +236,20 @@ async function submitAndRedirect(
     return;
   }
 
-  const evidence =
-    result.citations?.length && !result.evidence.some((e) => e.startsWith("Citation:"))
-      ? [...result.evidence, ...result.citations.slice(0, 3).map((c) => `Citation: ${c}`)]
-      : result.evidence;
+  // Final display/storage pass — never persist raw JSON blobs as prose
+  const { sanitizeAnalysisProse, sanitizeDisplayList } = await import("@/lib/ai/sanitize-text");
+  const summary = sanitizeAnalysisProse(result.summary, "summary");
+  const source_assessment = sanitizeAnalysisProse(
+    result.source_assessment,
+    "source_assessment",
+  );
+  const context_analysis = sanitizeAnalysisProse(
+    result.context_analysis,
+    "context_analysis",
+  );
+  const concerns = sanitizeDisplayList(result.concerns);
+  const evidence = sanitizeDisplayList(result.evidence);
+  const next_steps = sanitizeDisplayList(result.next_steps);
 
   toast.loading("Saving results…", { id: toastId });
 
@@ -251,13 +261,13 @@ async function submitAndRedirect(
       trust_score: result.trust_score,
       category: result.category,
       confidence: result.confidence,
-      summary: result.summary,
-      source_assessment: result.source_assessment,
-      context_analysis: result.context_analysis,
+      summary,
+      source_assessment,
+      context_analysis,
       ai_generated_detected: result.ai_generated_detected,
-      concerns: result.concerns ?? [],
-      evidence: evidence ?? [],
-      next_steps: result.next_steps ?? [],
+      concerns,
+      evidence,
+      next_steps,
       replay_data: result.replay_data ?? null,
     })
     .select()
@@ -296,6 +306,7 @@ function UrlForm({ consent, setConsent, onConsented, initialValue }: FormProps) 
   const [loading, setLoading] = useState(false);
   const [url, setUrl] = useState(initialValue ?? "");
   const [needConsent, setNeedConsent] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
 
   return (
     <form
@@ -308,9 +319,10 @@ function UrlForm({ consent, setConsent, onConsented, initialValue }: FormProps) 
         }
         const parsed = z.string().url().safeParse(url);
         if (!parsed.success) {
-          toast.error("Please enter a valid URL (with http:// or https://).");
+          setUrlError("Enter a valid URL including http:// or https://.");
           return;
         }
+        setUrlError(null);
         if (!consent) {
           setNeedConsent(true);
           toast.error("Please check the AI-processing consent box first.");
@@ -337,17 +349,22 @@ function UrlForm({ consent, setConsent, onConsented, initialValue }: FormProps) 
           type="url"
           placeholder="https://example.com/article"
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
+          onChange={(e) => {
+            setUrl(e.target.value);
+            setUrlError(null);
+          }}
           required
           disabled={loading}
+          aria-invalid={Boolean(urlError)}
         />
+        {urlError && <p className="mt-1 text-xs text-destructive">{urlError}</p>}
       </div>
       <ConsentRow consent={consent} setConsent={setConsent} highlight={needConsent && !consent} />
       <Button
         type="submit"
         size="lg"
         disabled={loading}
-        className="min-w-[12rem] rounded-full shadow-glow transition-transform hover:scale-[1.02]"
+        className="min-h-11 min-w-[12rem] rounded-full shadow-glow transition-transform hover:scale-[1.02]"
       >
         {loading ? (
           <>
@@ -372,6 +389,7 @@ function TextForm({ consent, setConsent, onConsented, initialValue }: FormProps)
   const [loading, setLoading] = useState(false);
   const [text, setText] = useState(initialValue ?? "");
   const [needConsent, setNeedConsent] = useState(false);
+  const [textError, setTextError] = useState<string | null>(null);
   const max = 5000;
 
   return (
@@ -384,13 +402,14 @@ function TextForm({ consent, setConsent, onConsented, initialValue }: FormProps)
           return;
         }
         if (text.trim().length < 10) {
-          toast.error("Please paste at least 10 characters.");
+          setTextError("Paste at least 10 characters.");
           return;
         }
         if (text.length > max) {
-          toast.error("Text too long.");
+          setTextError(`Text must be under ${max} characters.`);
           return;
         }
+        setTextError(null);
         if (!consent) {
           setNeedConsent(true);
           toast.error("Please check the AI-processing consent box first.");
@@ -418,11 +437,22 @@ function TextForm({ consent, setConsent, onConsented, initialValue }: FormProps)
           maxLength={max}
           placeholder="Paste a claim or excerpt to analyze…"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            setTextError(null);
+          }}
           disabled={loading}
+          aria-invalid={Boolean(textError)}
         />
-        <div className="mt-1 text-right text-xs text-muted-foreground">
-          {text.length}/{max}
+        <div className="mt-1 flex items-start justify-between gap-2 text-xs">
+          {textError ? (
+            <p className="text-destructive">{textError}</p>
+          ) : (
+            <span className="text-muted-foreground" />
+          )}
+          <span className="shrink-0 text-muted-foreground">
+            {text.length}/{max}
+          </span>
         </div>
       </div>
       <ConsentRow consent={consent} setConsent={setConsent} highlight={needConsent && !consent} />
@@ -430,7 +460,7 @@ function TextForm({ consent, setConsent, onConsented, initialValue }: FormProps)
         type="submit"
         size="lg"
         disabled={loading}
-        className="min-w-[12rem] rounded-full shadow-glow transition-transform hover:scale-[1.02]"
+        className="min-h-11 min-w-[12rem] rounded-full shadow-glow transition-transform hover:scale-[1.02]"
       >
         {loading ? (
           <>
@@ -561,7 +591,7 @@ function ImageForm({ consent, setConsent, onConsented }: FormProps) {
           <>
             <Upload className="h-9 w-9 text-teal" />
             <p className="mt-3 text-sm">Drag & drop an image here, or</p>
-            <label className="mt-3 inline-flex cursor-pointer items-center rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground transition-transform hover:scale-[1.03]">
+            <label className="mt-3 inline-flex min-h-11 cursor-pointer items-center rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.03]">
               Browse
               <input
                 type="file"
@@ -582,7 +612,7 @@ function ImageForm({ consent, setConsent, onConsented }: FormProps) {
         type="submit"
         size="lg"
         disabled={loading}
-        className="min-w-[12rem] rounded-full shadow-glow transition-transform hover:scale-[1.02]"
+        className="min-h-11 min-w-[12rem] rounded-full shadow-glow transition-transform hover:scale-[1.02]"
       >
         {loading ? (
           <>

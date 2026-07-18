@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -32,34 +32,72 @@ function CoursePlayer() {
   const navigate = useNavigate();
   const meta = getCourseMeta(slug);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["module", slug],
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ["module", slug, user?.id],
     queryFn: async () => {
-      const { data: m } = await db
+      const { data: m, error: mErr } = await db
         .from("learning_modules")
         .select("*")
         .eq("slug", slug)
         .maybeSingle();
+      if (mErr) throw mErr;
       if (!m) return null;
-      const [{ data: lessons }, { data: quiz }] = await Promise.all([
+      const [{ data: lessons }, { data: quiz }, progressRes] = await Promise.all([
         db.from("lessons").select("*").eq("module_id", m.id).order("sort_order"),
         db.from("quizzes").select("*").eq("module_id", m.id).maybeSingle(),
+        user
+          ? db
+              .from("user_learning_progress")
+              .select("progress_pct, completed")
+              .eq("user_id", user.id)
+              .eq("module_id", m.id)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
       ]);
-      return { module: m, lessons: lessons ?? [], quiz };
+      return {
+        module: m,
+        lessons: lessons ?? [],
+        quiz,
+        progress: progressRes.data as { progress_pct: number; completed: boolean } | null,
+      };
     },
   });
 
   const [activeLesson, setActiveLesson] = useState(0);
   const [completedUnits, setCompletedUnits] = useState<Set<number>>(() => new Set());
+  const [hydrated, setHydrated] = useState(false);
+  const [savingUnit, setSavingUnit] = useState(false);
 
   const lessons = data?.lessons ?? [];
   const total = lessons.length || 1;
+
+  // Restore completed units from saved progress_pct (unit share is up to 90%)
+  useEffect(() => {
+    if (!data?.lessons?.length || hydrated) return;
+    const pct = data.progress?.progress_pct ?? 0;
+    if (data.progress?.completed) {
+      setCompletedUnits(new Set(data.lessons.map((_: unknown, idx: number) => idx)));
+      setActiveLesson(Math.max(0, data.lessons.length - 1));
+    } else if (pct > 0) {
+      const completedCount = Math.min(
+        data.lessons.length,
+        Math.round((pct / 90) * data.lessons.length),
+      );
+      const next = new Set<number>();
+      for (let i = 0; i < completedCount; i++) next.add(i);
+      setCompletedUnits(next);
+      setActiveLesson(Math.min(completedCount, data.lessons.length - 1));
+    }
+    setHydrated(true);
+  }, [data, hydrated]);
+
   const displayPct = useMemo(() => {
     if (!lessons.length) return 0;
+    if (data?.progress?.completed) return 100;
     const unitShare = Math.round((completedUnits.size / total) * 80);
     const viewing = Math.round(((activeLesson + 1) / total) * 15);
-    return Math.min(95, Math.max(unitShare, viewing));
-  }, [activeLesson, completedUnits, lessons.length, total]);
+    return Math.min(95, Math.max(unitShare, viewing, data?.progress?.progress_pct ?? 0));
+  }, [activeLesson, completedUnits, data?.progress, lessons.length, total]);
 
   if (isLoading) {
     return (
@@ -72,6 +110,28 @@ function CoursePlayer() {
       </main>
     );
   }
+
+  if (isError) {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-10 text-center">
+        <p className="font-medium">Could not load this course.</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {(error as Error)?.message || "Something went wrong."}
+        </p>
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <Button variant="secondary" className="rounded-full" onClick={() => refetch()}>
+            Retry
+          </Button>
+          <Link to="/learn">
+            <Button variant="outline" className="rounded-full">
+              Back to catalog
+            </Button>
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   if (!data?.module) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-10">
@@ -90,29 +150,37 @@ function CoursePlayer() {
   const courseTitle = mod.title.replace(/^Course:\s*/i, "");
 
   async function markUnitComplete() {
-    if (!user) return;
-    const next = new Set(completedUnits);
-    next.add(activeLesson);
-    setCompletedUnits(next);
-    const pct = Math.min(90, Math.round((next.size / total) * 90));
-    await db.from("user_learning_progress").upsert(
-      {
-        user_id: user.id,
-        module_id: mod.id,
-        progress_pct: pct,
-        completed: false,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,module_id" },
-    );
-    const { data: b } = await db
-      .from("badges")
-      .select("id")
-      .eq("slug", "fact-checker-in-training")
-      .maybeSingle();
-    if (b?.id) await db.from("user_badges").insert({ user_id: user.id, badge_id: b.id });
-    toast.success(`Unit ${activeLesson + 1} marked complete`);
-    if (activeLesson < total - 1) setActiveLesson((i) => i + 1);
+    if (!user || savingUnit) return;
+    setSavingUnit(true);
+    try {
+      const next = new Set(completedUnits);
+      next.add(activeLesson);
+      setCompletedUnits(next);
+      const pct = Math.min(90, Math.round((next.size / total) * 90));
+      const { error: upErr } = await db.from("user_learning_progress").upsert(
+        {
+          user_id: user.id,
+          module_id: mod.id,
+          progress_pct: pct,
+          completed: false,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,module_id" },
+      );
+      if (upErr) throw new Error(upErr.message || "Failed to save progress");
+      const { data: b } = await db
+        .from("badges")
+        .select("id")
+        .eq("slug", "fact-checker-in-training")
+        .maybeSingle();
+      if (b?.id) await db.from("user_badges").insert({ user_id: user.id, badge_id: b.id });
+      toast.success(`Unit ${activeLesson + 1} marked complete`);
+      if (activeLesson < total - 1) setActiveLesson((i) => i + 1);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save progress");
+    } finally {
+      setSavingUnit(false);
+    }
   }
 
   return (
@@ -154,7 +222,7 @@ function CoursePlayer() {
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[260px_1fr]">
         {/* Curriculum sidebar */}
-        <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+        <aside className="space-y-4 lg:sticky lg:top-[var(--site-header-offset)] lg:self-start">
           <div className="glass rounded-xl border-white/10 p-4">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               <ClipboardList className="h-3.5 w-3.5 text-teal" />
@@ -247,25 +315,51 @@ function CoursePlayer() {
           )}
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <Button
-              variant="outline"
-              className="rounded-full"
-              disabled={activeLesson <= 0}
-              onClick={() => setActiveLesson((i) => Math.max(0, i - 1))}
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" /> Previous unit
-            </Button>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" className="rounded-full" onClick={markUnitComplete}>
-                <CheckCircle2 className="mr-2 h-4 w-4" /> Mark unit complete
-              </Button>
+            <div className="flex flex-col gap-1">
               <Button
-                className="rounded-full shadow-glow transition-transform hover:scale-[1.02]"
-                disabled={activeLesson >= total - 1}
-                onClick={() => setActiveLesson((i) => Math.min(total - 1, i + 1))}
+                variant="outline"
+                className="min-h-11 rounded-full"
+                disabled={activeLesson <= 0}
+                title={activeLesson <= 0 ? "You’re on the first unit" : "Previous unit"}
+                onClick={() => setActiveLesson((i) => Math.max(0, i - 1))}
               >
-                Next unit <ArrowRight className="ml-2 h-4 w-4" />
+                <ArrowLeft className="mr-2 h-4 w-4" /> Previous unit
               </Button>
+              {activeLesson <= 0 && (
+                <span className="text-xs text-muted-foreground">You’re on the first unit</span>
+              )}
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  variant="secondary"
+                  className="min-h-11 rounded-full"
+                  disabled={savingUnit || completedUnits.has(activeLesson)}
+                  onClick={markUnitComplete}
+                >
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  {savingUnit
+                    ? "Saving…"
+                    : completedUnits.has(activeLesson)
+                      ? "Unit complete"
+                      : "Mark unit complete"}
+                </Button>
+                <Button
+                  className="min-h-11 rounded-full shadow-glow transition-transform hover:scale-[1.02]"
+                  disabled={activeLesson >= total - 1}
+                  title={
+                    activeLesson >= total - 1 ? "You’re on the last unit" : "Next unit"
+                  }
+                  onClick={() => setActiveLesson((i) => Math.min(total - 1, i + 1))}
+                >
+                  Next unit <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+              {activeLesson >= total - 1 && (
+                <span className="text-xs text-muted-foreground">
+                  You’re on the last unit — take the final quiz when ready
+                </span>
+              )}
             </div>
           </div>
 

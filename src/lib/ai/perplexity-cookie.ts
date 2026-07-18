@@ -18,6 +18,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { extractJson, normalizeResult } from "./perplexity";
+import { sanitizeAnalysisProse } from "./sanitize-text";
 import type { AnalysisInput, AnalysisResult } from "./types";
 
 const WEB_SSE_URL = "https://www.perplexity.ai/rest/sse/perplexity_ask";
@@ -305,13 +306,18 @@ export async function perplexityCookieAnalyze(input: AnalysisInput): Promise<Ana
               ? "low_confidence"
               : "potentially_misleading",
       confidence: 55,
-      summary: answer.slice(0, 600),
+      // Never dump raw JSON into prose — normalizeResult/sanitize also unwrap
+      summary: sanitizeAnalysisProse(answer.slice(0, 2000), "summary").slice(0, 600) ||
+        "Automated analysis completed. Independent verification is still recommended.",
       source_assessment:
         "Source signals were reviewed with web-grounded analysis. Cross-check the original publisher when possible.",
-      context_analysis: answer.slice(0, 1500),
+      context_analysis:
+        sanitizeAnalysisProse(answer.slice(0, 2000), "context_analysis").slice(0, 1200) ||
+        "Context review was limited. Look for missing dates, authors, and primary sources.",
       ai_generated_detected: /ai[- ]generated|deepfake|synthetic/.test(lower),
       concerns: ["Some analysis fields were inferred; treat the score as provisional."],
-      evidence: citations.slice(0, 5).map((c) => `Citation: ${c}`),
+      // Empty evidence so normalizeResult folds filtered citations cleanly
+      evidence: [],
       next_steps: [
         "Cross-check with two independent sources",
         "Open the original URL and inspect author, date, and citations",

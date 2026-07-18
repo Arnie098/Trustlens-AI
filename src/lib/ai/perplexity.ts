@@ -12,6 +12,8 @@ import {
   type ReplayNode,
   type TrustCategory,
 } from "./types";
+import { filterCitationUrls } from "@/lib/evidence";
+import { sanitizeAnalysisProse, sanitizeStringList } from "./sanitize-text";
 
 const PERPLEXITY_URL = "https://api.perplexity.ai/chat/completions";
 
@@ -151,13 +153,51 @@ function normalizeReplay(raw: unknown, input: AnalysisInput, category: TrustCate
   });
 }
 
+/** If the model nested a full analysis JSON string in one field, hoist fields up. */
+function unwrapNestedAnalysis(raw: Record<string, unknown>): Record<string, unknown> {
+  let obj = { ...raw };
+
+  // Sometimes the whole payload is double-wrapped under a string field
+  for (const key of Object.keys(obj)) {
+    const v = obj[key];
+    if (typeof v !== "string") continue;
+    const t = v.trim();
+    if (!t.startsWith("{") || !t.includes("trust_score")) continue;
+    try {
+      const inner = JSON.parse(t) as Record<string, unknown>;
+      if (inner && typeof inner === "object" && !Array.isArray(inner)) {
+        // Prefer outer non-JSON fields, fill from inner
+        obj = { ...inner, ...obj };
+        // Replace the bad string field with the inner prose equivalent when present
+        if (typeof inner[key] === "string") obj[key] = inner[key];
+        else if (key === "context_analysis" && typeof inner.context_analysis === "string") {
+          obj.context_analysis = inner.context_analysis;
+        }
+      }
+    } catch {
+      /* keep original */
+    }
+  }
+
+  // If context_analysis is itself the full blob, pull prose out
+  for (const key of ["summary", "source_assessment", "context_analysis"] as const) {
+    if (typeof obj[key] === "string") {
+      obj[key] = sanitizeAnalysisProse(obj[key] as string, key);
+    }
+  }
+
+  return obj;
+}
+
 export function normalizeResult(
   raw: Record<string, unknown>,
   input: AnalysisInput,
   citations: string[],
   provider: AnalysisResult["provider"] = "perplexity",
 ): AnalysisResult {
-  let score = Math.round(Number(raw.trust_score));
+  const data = unwrapNestedAnalysis(raw);
+
+  let score = Math.round(Number(data.trust_score));
   if (!Number.isFinite(score)) score = 50;
   score = Math.min(100, Math.max(0, score));
 
@@ -167,45 +207,67 @@ export function normalizeResult(
     "low_confidence",
     "potentially_misleading",
   ];
-  let category = raw.category as TrustCategory;
+  let category = data.category as TrustCategory;
   if (!allowed.includes(category)) category = categoryFor(score);
 
-  let confidence = Number(raw.confidence);
+  let confidence = Number(data.confidence);
   if (!Number.isFinite(confidence)) confidence = 70;
   confidence = Math.min(100, Math.max(0, Math.round(confidence * 10) / 10));
 
-  const evidence = asStringArray(raw.evidence);
-  // Fold Perplexity web citations into evidence when sparse
+  let evidence = asStringArray(data.evidence);
+  if (!evidence.length) evidence = sanitizeStringList(data.evidence);
+  // Fold high-quality Perplexity web citations when sparse (skip images / junk hosts)
   if (citations.length && evidence.length < 3) {
-    for (const c of citations.slice(0, 3)) {
-      if (!evidence.includes(c)) evidence.push(`Citation: ${c}`);
+    for (const c of filterCitationUrls(citations, 3)) {
+      if (!evidence.some((e) => e.includes(c))) evidence.push(`Citation: ${c}`);
     }
+  }
+
+  let concerns = asStringArray(data.concerns);
+  if (!concerns.length) concerns = sanitizeStringList(data.concerns);
+
+  let next_steps = asStringArray(data.next_steps);
+  if (!next_steps.length) {
+    next_steps = sanitizeStringList(data.next_steps);
+  }
+  if (!next_steps.length) {
+    next_steps = [
+      "Cross-check the claim with two independent, credible sources",
+      "Search the exact quote to find original context",
+      "Pause before sharing if anything feels uncertain",
+    ];
   }
 
   return {
     trust_score: score,
     category,
     confidence,
-    summary: String(
-      raw.summary ||
-        "Automated web-grounded analysis completed. Verify with independent sources before sharing.",
+    summary: sanitizeAnalysisProse(
+      String(
+        data.summary ||
+          "Automated web-grounded analysis completed. Verify with independent sources before sharing.",
+      ),
+      "summary",
     ),
-    source_assessment: String(
-      raw.source_assessment || "Source assessment incomplete; check the original publisher.",
+    source_assessment: sanitizeAnalysisProse(
+      String(
+        data.source_assessment ||
+          "Source assessment incomplete; check the original publisher.",
+      ),
+      "source_assessment",
     ),
-    context_analysis: String(
-      raw.context_analysis ||
-        "Context review was limited. Look for missing dates, authors, and primary sources.",
+    context_analysis: sanitizeAnalysisProse(
+      String(
+        data.context_analysis ||
+          "Context review was limited. Look for missing dates, authors, and primary sources.",
+      ),
+      "context_analysis",
     ),
-    ai_generated_detected: Boolean(raw.ai_generated_detected),
-    concerns: asStringArray(raw.concerns),
+    ai_generated_detected: Boolean(data.ai_generated_detected),
+    concerns,
     evidence,
-    next_steps: asStringArray(raw.next_steps, [
-      "Cross-check the claim with two independent, credible sources",
-      "Search the exact quote to find original context",
-      "Pause before sharing if anything feels uncertain",
-    ]),
-    replay_data: normalizeReplay(raw.replay_data, input, category),
+    next_steps,
+    replay_data: normalizeReplay(data.replay_data, input, category),
     provider,
     citations,
   };

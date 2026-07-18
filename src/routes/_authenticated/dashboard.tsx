@@ -42,7 +42,7 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 function Dashboard() {
   const { user, profile } = useSession();
 
-  const { data } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["dashboard", user?.id],
     enabled: !!user,
     queryFn: async () => {
@@ -131,36 +131,60 @@ function Dashboard() {
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:flex sm:flex-wrap sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="min-w-0 animate-fade-up">
           <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-muted-foreground">
             <span className="inline-block h-px w-8 bg-foreground/40" />
             <span>Your workspace</span>
           </div>
-          <h1 className="mt-4 truncate font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-            Welcome back, {profile?.full_name ?? "friend"}
+          <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+            Welcome back,{" "}
+            <span className="break-words">{profile?.full_name ?? "friend"}</span>
           </h1>
           <p className="mt-2 text-muted-foreground">
             Verify content, track your learning, and earn badges.
           </p>
         </div>
-        <Link to="/verify">
+        <Link to="/verify" className="shrink-0 self-start sm:self-auto">
           <Button
             size="lg"
-            className="rounded-full shadow-glow transition-transform hover:scale-[1.02]"
+            className="min-h-11 rounded-full shadow-glow transition-transform hover:scale-[1.02]"
           >
             <Search className="mr-2 h-5 w-5" /> New Verification
           </Button>
         </Link>
       </div>
 
+      {isError && (
+        <div className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm">
+          <p className="font-medium text-foreground">Could not load your dashboard.</p>
+          <p className="mt-1 text-muted-foreground">
+            {(error as Error)?.message || "Something went wrong. Please try again."}
+          </p>
+          <Button variant="outline" size="sm" className="mt-3 rounded-full" onClick={() => refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
+
       <SampleDataBar userId={user?.id} hasData={(data?.totalVerifications ?? 0) > 0} />
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat icon={ShieldCheck} label="Verifications" value={data?.totalVerifications ?? 0} />
-        <Stat icon={CheckCircle2} label="Quizzes taken" value={data?.totalQuizzes ?? 0} />
-        <Stat icon={BookOpen} label="Lessons completed" value={completedLessons} />
-        <Stat icon={Trophy} label="Badges earned" value={data?.badges.length ?? 0} />
+        {isLoading && !data ? (
+          <>
+            <StatSkeleton />
+            <StatSkeleton />
+            <StatSkeleton />
+            <StatSkeleton />
+          </>
+        ) : (
+          <>
+            <Stat icon={ShieldCheck} label="Verifications" value={data?.totalVerifications ?? 0} />
+            <Stat icon={CheckCircle2} label="Quizzes taken" value={data?.totalQuizzes ?? 0} />
+            <Stat icon={BookOpen} label="Lessons completed" value={completedLessons} />
+            <Stat icon={Trophy} label="Badges earned" value={data?.badges.length ?? 0} />
+          </>
+        )}
       </div>
 
       {/* Analytics */}
@@ -330,7 +354,9 @@ function Dashboard() {
         <div className="glass rounded-2xl p-5">
           <div className="text-lg font-semibold tracking-tight">Your badges</div>
           <div className="mt-4">
-            {data?.badges.length ? (
+            {isLoading && !data ? (
+              <p className="text-sm text-muted-foreground animate-pulse">Loading badges…</p>
+            ) : data?.badges.length ? (
               <ul className="space-y-3">
                 {data.badges
                   .slice(0, 5)
@@ -368,7 +394,9 @@ function Dashboard() {
         <div className="glass rounded-2xl p-5 lg:col-span-2">
           <div className="text-lg font-semibold tracking-tight">Recent verifications</div>
           <div className="mt-4">
-            {data?.recent.length ? (
+            {isLoading && !data ? (
+              <p className="text-sm text-muted-foreground animate-pulse">Loading recent activity…</p>
+            ) : data?.recent.length ? (
               <ul className="space-y-3">
                 {data.recent.map(
                   (r: {
@@ -384,12 +412,18 @@ function Dashboard() {
                   }) => {
                     const res = r.verification_results?.[0];
                     const c = res?.category;
+                    const typeLabel =
+                      r.type === "url" ? "URL" : r.type === "text" ? "Text" : "Image";
                     return (
                       <li
                         key={r.id}
                         className="flex items-center gap-3 rounded-xl border border-border bg-background/40 p-3 transition-colors hover:border-teal/40"
                       >
-                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-teal/15 text-teal">
+                        <div
+                          className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-teal/15 text-teal"
+                          title={typeLabel}
+                          aria-label={typeLabel}
+                        >
                           {r.type === "url" ? (
                             <Search className="h-4 w-4" />
                           ) : r.type === "text" ? (
@@ -403,6 +437,7 @@ function Dashboard() {
                             {r.input_url ?? r.input_text?.slice(0, 60) ?? "Image upload"}
                           </div>
                           <div className="text-xs text-muted-foreground">
+                            {typeLabel} ·{" "}
                             {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
                           </div>
                         </div>
@@ -440,25 +475,33 @@ function Dashboard() {
         <div className="glass rounded-2xl p-5">
           <div className="text-lg font-semibold tracking-tight">Recommended lessons</div>
           <div className="mt-4 space-y-3">
-            {data?.modules
-              .slice(0, 3)
-              .map((m: { id: string; slug: string; title: string; estimated_minutes: number }) => {
-                const p = data.progress.find((x: { module_id: string }) => x.module_id === m.id);
-                return (
-                  <Link
-                    key={m.id}
-                    to="/learn/$slug"
-                    params={{ slug: m.slug }}
-                    className="block rounded-xl border border-border bg-background/40 p-3 transition-colors hover:border-teal/40"
-                  >
-                    <div className="text-sm font-semibold">{m.title}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {m.estimated_minutes} min
-                    </div>
-                    <Progress className="mt-2 h-1.5" value={p?.progress_pct ?? 0} />
-                  </Link>
-                );
-              })}
+            {isLoading && !data ? (
+              <p className="text-sm text-muted-foreground animate-pulse">Loading lessons…</p>
+            ) : data?.modules?.length ? (
+              data.modules
+                .slice(0, 3)
+                .map((m: { id: string; slug: string; title: string; estimated_minutes: number }) => {
+                  const p = data.progress.find((x: { module_id: string }) => x.module_id === m.id);
+                  return (
+                    <Link
+                      key={m.id}
+                      to="/learn/$slug"
+                      params={{ slug: m.slug }}
+                      className="block rounded-xl border border-border bg-background/40 p-3 transition-colors hover:border-teal/40"
+                    >
+                      <div className="text-sm font-semibold">{m.title}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {m.estimated_minutes} min
+                      </div>
+                      <Progress className="mt-2 h-1.5" value={p?.progress_pct ?? 0} />
+                    </Link>
+                  );
+                })
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No lessons available yet. Check back soon.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -550,6 +593,18 @@ function EmptyChart({ label }: { label: string }) {
   );
 }
 
+function StatSkeleton() {
+  return (
+    <div className="glass flex items-center gap-4 rounded-2xl p-5">
+      <div className="h-12 w-12 shrink-0 animate-pulse rounded-xl bg-muted" />
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="h-7 w-12 animate-pulse rounded bg-muted" />
+        <div className="h-3 w-20 animate-pulse rounded bg-muted" />
+      </div>
+    </div>
+  );
+}
+
 const SAMPLE_TAG = "[SAMPLE]";
 
 const SAMPLE_ITEMS: Array<{
@@ -589,6 +644,8 @@ const SAMPLE_ITEMS: Array<{
 function SampleDataBar({ userId, hasData }: { userId: string | undefined; hasData: boolean }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState<"seed" | "clear" | null>(null);
+  // Collapse demo tools by default when the user already has data
+  const [open, setOpen] = useState(!hasData);
 
   if (!userId) return null;
 
@@ -707,20 +764,39 @@ function SampleDataBar({ userId, hasData }: { userId: string | undefined; hasDat
   }
 
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-border bg-muted/30 p-3 text-sm">
-      <span className="text-muted-foreground">
-        {hasData
-          ? "Playing with demo data?"
-          : "New here? Load a set of demo verifications to preview the dashboard."}
-      </span>
-      <div className="ml-auto flex gap-2">
-        <Button size="sm" variant="secondary" onClick={seed} disabled={busy !== null}>
-          {busy === "seed" ? "Loading…" : "Load sample data"}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={clear} disabled={busy !== null}>
-          {busy === "clear" ? "Clearing…" : "Clear samples"}
-        </Button>
-      </div>
+    <div className="mt-4 rounded-lg border border-dashed border-border bg-muted/30 text-sm">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <span className="text-muted-foreground">
+          {hasData
+            ? "Demo tools (sample data)"
+            : "New here? Load demo verifications to preview the dashboard."}
+        </span>
+        <span className="shrink-0 text-xs font-medium text-foreground/80">
+          {open ? "Hide" : "Show"}
+        </span>
+      </button>
+      {open && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/60 px-3 py-3">
+          <span className="text-muted-foreground">
+            {hasData
+              ? "Load or clear illustrative verifications without affecting real analyses beyond matching sample URLs/tags."
+              : "Seeds about two weeks of sample verifications and a few quiz attempts."}
+          </span>
+          <div className="ml-auto flex gap-2">
+            <Button size="sm" variant="secondary" onClick={seed} disabled={busy !== null}>
+              {busy === "seed" ? "Loading…" : "Load sample data"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={clear} disabled={busy !== null}>
+              {busy === "clear" ? "Clearing…" : "Clear samples"}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

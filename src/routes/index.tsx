@@ -148,16 +148,9 @@ function Landing() {
         </div>
       </section>
 
-      {/* Signal flow banner — light network field, navy type, teal nodes */}
+      {/* Signal flow banner — theme-aware network field */}
       <section className="relative overflow-hidden border-y border-border">
-        {/* Soft ocean mist base matching site theme */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(105deg, oklch(0.97 0.012 220) 0%, oklch(0.93 0.02 215) 42%, oklch(0.72 0.04 230) 100%)",
-          }}
-        />
+        <div className="absolute inset-0 bg-gradient-to-br from-secondary via-secondary/80 to-teal/20 dark:from-card dark:via-background dark:to-teal/10" />
         <img
           src={signalFlow}
           alt=""
@@ -165,7 +158,7 @@ function Landing() {
           loading="lazy"
           width={1024}
           height={1024}
-          className="absolute inset-0 h-full w-full object-cover object-[70%_center] opacity-90 mix-blend-multiply sm:object-center dark:opacity-50 dark:mix-blend-screen"
+          className="absolute inset-0 h-full w-full object-cover object-[70%_center] opacity-70 mix-blend-multiply sm:object-center dark:opacity-40 dark:mix-blend-screen"
         />
         {/* Teal glow wash so nodes read as brand teal */}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-l from-teal/25 via-transparent to-transparent" />
@@ -249,29 +242,34 @@ function Landing() {
             </figure>
           </div>
 
-          <ol ref={revealRef} className="mt-16 divide-y divide-border border-y border-border">
+          <ol ref={revealRef} className="mt-16 space-y-2 border-t border-border pt-4">
             {features.map((f, i) => (
               <li
                 key={f.title}
                 data-reveal
-                className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-6 py-8 opacity-0 transition-transform duration-300 hover:translate-x-1 [&.animate-fade-up]:opacity-100 sm:grid-cols-[3rem_1fr_auto_2.5rem] sm:gap-10"
+                className="group relative grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 rounded-2xl border border-transparent px-4 py-5 opacity-100 transition-[border-color,background-color,box-shadow] duration-200 sm:grid-cols-[2.75rem_minmax(0,1fr)_auto_2.75rem] sm:items-center sm:gap-8 sm:px-5 motion-safe:opacity-0 motion-safe:[&.animate-fade-up]:opacity-100 [@media(hover:hover)]:hover:border-border [@media(hover:hover)]:hover:bg-muted/40 [@media(hover:hover)]:hover:shadow-sm"
               >
-                <span className="hidden font-mono text-xs text-muted-foreground sm:block">
+                {/* Left accent — only on real hover devices, never a full-row color flood */}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-y-3 left-0 w-0.5 rounded-full bg-teal/0 transition-colors duration-200 [@media(hover:hover)]:group-hover:bg-teal/70"
+                />
+                <span className="hidden font-mono text-xs tabular-nums text-muted-foreground sm:block">
                   {String(i + 1).padStart(2, "0")}
                 </span>
                 <div className="min-w-0">
-                  <h3 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">
+                  <h3 className="font-display text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
                     {f.title}
                   </h3>
-                  <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">
+                  <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
                     {f.body}
                   </p>
                 </div>
-                <div className="hidden text-xs uppercase tracking-[0.18em] text-muted-foreground sm:block">
+                <div className="hidden text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground sm:block">
                   {f.tag}
                 </div>
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-border text-foreground transition-all duration-300 group-hover:scale-110 group-hover:bg-foreground group-hover:text-background group-hover:shadow-glow">
-                  <f.icon className="h-4 w-4 transition-transform duration-300 group-hover:rotate-6" />
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-border bg-background/40 text-foreground transition-colors duration-200 [@media(hover:hover)]:group-hover:border-teal/50 [@media(hover:hover)]:group-hover:bg-teal/10 [@media(hover:hover)]:group-hover:text-teal">
+                  <f.icon className="h-4 w-4" aria-hidden />
                 </div>
               </li>
             ))}

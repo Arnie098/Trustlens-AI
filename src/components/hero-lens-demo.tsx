@@ -5,6 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { TrustGauge } from "@/components/trust-gauge";
 import { analyzeContent, type AnalysisResult } from "@/lib/ai/analyze";
+import {
+  sanitizeAnalysisProse,
+  sanitizeDisplayList,
+} from "@/lib/ai/sanitize-text";
 
 type DemoState =
   | { phase: "idle" }
@@ -86,6 +90,8 @@ export function HeroLensDemo() {
   );
 }
 
+const PRESET_LABELS = ["Miracle cure claim", "Reuters rate decision", "Election conspiracy"];
+
 function IdleView({
   text,
   setText,
@@ -97,35 +103,44 @@ function IdleView({
   onRun: () => void;
   onPreset: (p: string) => void;
 }) {
-  const tooShort = text.trim().length > 0 && text.trim().length < MIN_LEN;
+  const len = text.trim().length;
+  const canRun = len >= MIN_LEN;
   return (
     <div className="mt-5">
+      <label htmlFor="hero-claim" className="text-sm font-medium text-foreground">
+        Claim or headline
+      </label>
       <Textarea
+        id="hero-claim"
         rows={4}
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder="Paste a claim or headline to analyze…"
-        className="resize-none bg-background/60"
+        className="mt-1.5 resize-none bg-background/60"
       />
-      {tooShort && (
-        <p className="mt-1 text-xs text-muted-foreground">Enter at least {MIN_LEN} characters.</p>
-      )}
+      <p className="mt-1 text-xs text-muted-foreground">
+        {canRun
+          ? `${len} characters`
+          : `Enter at least ${MIN_LEN} characters to analyze${len > 0 ? ` (${len}/${MIN_LEN})` : ""}.`}
+      </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {PRESETS.map((p, i) => (
           <button
             key={i}
             type="button"
+            title={p}
             onClick={() => onPreset(p)}
-            className="rounded-full border border-border px-3 py-1 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            className="min-h-9 rounded-full border border-border px-3 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           >
-            Example {i + 1}
+            {PRESET_LABELS[i] ?? `Example ${i + 1}`}
           </button>
         ))}
       </div>
       <Button
         onClick={onRun}
-        disabled={text.trim().length < MIN_LEN}
-        className="mt-4 w-full rounded-full"
+        disabled={!canRun}
+        title={!canRun ? `Enter at least ${MIN_LEN} characters` : "Analyze claim"}
+        className="mt-4 min-h-11 w-full rounded-full"
       >
         <Sparkles className="mr-2 h-4 w-4" />
         Analyze
@@ -145,18 +160,21 @@ function RunningView() {
 }
 
 function ResultView({ result, onReset }: { result: AnalysisResult; onReset: () => void }) {
-  const points = (result.concerns?.length ? result.concerns : result.evidence) ?? [];
+  const summary = sanitizeAnalysisProse(result.summary, "summary");
+  const concerns = sanitizeDisplayList(result.concerns);
+  const evidence = sanitizeDisplayList(result.evidence);
+  const points = (concerns.length ? concerns : evidence).slice(0, 3);
   return (
     <div className="mt-5 flex flex-col items-center">
       <TrustGauge score={result.trust_score} category={result.category} size={180} animate />
-      {result.summary && (
-        <p className="mt-4 text-center text-sm text-muted-foreground">{result.summary}</p>
+      {summary && (
+        <p className="mt-4 text-center text-sm text-muted-foreground break-words">{summary}</p>
       )}
       <ul className="mt-4 w-full space-y-2 text-sm text-muted-foreground">
-        {points.slice(0, 3).map((p, i) => (
+        {points.map((p, i) => (
           <li key={i} className="flex gap-3">
             <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-foreground" />
-            {p}
+            <span className="min-w-0 break-words">{p}</span>
           </li>
         ))}
       </ul>
