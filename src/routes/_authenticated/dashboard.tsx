@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { toast } from "sonner";
 import {
   Search,
@@ -21,18 +21,9 @@ import { useSession } from "@/lib/auth/session";
 import { db, type TrustCategory } from "@/lib/db";
 import { trustLabel, trustColorVar } from "@/lib/ai/mock-analyze";
 import { formatDistanceToNow, format, subDays, startOfDay } from "date-fns";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+
+// Lazy-load recharts so Verify and other routes never pay the chart bundle cost.
+const DashboardCharts = lazy(() => import("@/components/dashboard-charts"));
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — TrustLensAI" }] }),
@@ -138,8 +129,7 @@ function Dashboard() {
             <span>Your workspace</span>
           </div>
           <h1 className="mt-4 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-            Welcome back,{" "}
-            <span className="break-words">{profile?.full_name ?? "friend"}</span>
+            Welcome back, <span className="break-words">{profile?.full_name ?? "friend"}</span>
           </h1>
           <p className="mt-2 text-muted-foreground">
             Verify content, track your learning, and earn badges.
@@ -161,7 +151,12 @@ function Dashboard() {
           <p className="mt-1 text-muted-foreground">
             {(error as Error)?.message || "Something went wrong. Please try again."}
           </p>
-          <Button variant="outline" size="sm" className="mt-3 rounded-full" onClick={() => refetch()}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3 rounded-full"
+            onClick={() => refetch()}
+          >
             Retry
           </Button>
         </div>
@@ -204,117 +199,19 @@ function Dashboard() {
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-5">
-          <div className="glass rounded-2xl p-5 lg:col-span-3">
-            <div className="text-base font-semibold">Verifications over time</div>
-            <div className="mt-4">
-              {analytics.length ? (
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={trendData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="fillCount" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="var(--teal)" stopOpacity={0.35} />
-                          <stop offset="100%" stopColor="var(--teal)" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="var(--border)"
-                        vertical={false}
-                      />
-                      <XAxis
-                        dataKey="day"
-                        tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                        tickLine={false}
-                        axisLine={false}
-                      />
-                      <YAxis
-                        allowDecimals={false}
-                        tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                        tickLine={false}
-                        axisLine={false}
-                        width={30}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          background: "var(--card)",
-                          color: "var(--card-foreground)",
-                          border: "1px solid var(--border)",
-                          borderRadius: 8,
-                          fontSize: 12,
-                        }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="count"
-                        stroke="var(--teal)"
-                        strokeWidth={2}
-                        fill="url(#fillCount)"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <EmptyChart label="Run a verification to see your trend line." />
-              )}
+        <Suspense
+          fallback={
+            <div className="grid h-72 place-items-center rounded-2xl border border-dashed border-border text-sm text-muted-foreground">
+              Loading charts…
             </div>
-          </div>
-
-          <div className="glass rounded-2xl p-5 lg:col-span-2">
-            <div className="text-base font-semibold">TrustScore distribution</div>
-            <div className="mt-4">
-              {analytics.length ? (
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={catData}
-                      layout="vertical"
-                      margin={{ top: 4, right: 12, left: 0, bottom: 0 }}
-                    >
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke="var(--border)"
-                        horizontal={false}
-                      />
-                      <XAxis
-                        type="number"
-                        allowDecimals={false}
-                        tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                        tickLine={false}
-                        axisLine={false}
-                      />
-                      <YAxis
-                        type="category"
-                        dataKey="category"
-                        tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                        tickLine={false}
-                        axisLine={false}
-                        width={110}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          background: "var(--card)",
-                          color: "var(--card-foreground)",
-                          border: "1px solid var(--border)",
-                          borderRadius: 8,
-                          fontSize: 12,
-                        }}
-                      />
-                      <Bar dataKey="count" radius={[0, 6, 6, 0]}>
-                        {catData.map((d) => (
-                          <Cell key={d.key} fill={trustColorVar(d.key)} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <EmptyChart label="Categories will appear after your first verification." />
-              )}
-            </div>
-          </div>
-        </div>
+          }
+        >
+          <DashboardCharts
+            trendData={trendData}
+            catData={catData}
+            hasAnalytics={analytics.length > 0}
+          />
+        </Suspense>
       </section>
 
       <div className="mt-10 grid gap-6 lg:grid-cols-3">
@@ -395,7 +292,9 @@ function Dashboard() {
           <div className="text-lg font-semibold tracking-tight">Recent verifications</div>
           <div className="mt-4">
             {isLoading && !data ? (
-              <p className="text-sm text-muted-foreground animate-pulse">Loading recent activity…</p>
+              <p className="text-sm text-muted-foreground animate-pulse">
+                Loading recent activity…
+              </p>
             ) : data?.recent.length ? (
               <ul className="space-y-3">
                 {data.recent.map(
@@ -480,23 +379,27 @@ function Dashboard() {
             ) : data?.modules?.length ? (
               data.modules
                 .slice(0, 3)
-                .map((m: { id: string; slug: string; title: string; estimated_minutes: number }) => {
-                  const p = data.progress.find((x: { module_id: string }) => x.module_id === m.id);
-                  return (
-                    <Link
-                      key={m.id}
-                      to="/learn/$slug"
-                      params={{ slug: m.slug }}
-                      className="block rounded-xl border border-border bg-background/40 p-3 transition-colors hover:border-teal/40"
-                    >
-                      <div className="text-sm font-semibold">{m.title}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {m.estimated_minutes} min
-                      </div>
-                      <Progress className="mt-2 h-1.5" value={p?.progress_pct ?? 0} />
-                    </Link>
-                  );
-                })
+                .map(
+                  (m: { id: string; slug: string; title: string; estimated_minutes: number }) => {
+                    const p = data.progress.find(
+                      (x: { module_id: string }) => x.module_id === m.id,
+                    );
+                    return (
+                      <Link
+                        key={m.id}
+                        to="/learn/$slug"
+                        params={{ slug: m.slug }}
+                        className="block rounded-xl border border-border bg-background/40 p-3 transition-colors hover:border-teal/40"
+                      >
+                        <div className="text-sm font-semibold">{m.title}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {m.estimated_minutes} min
+                        </div>
+                        <Progress className="mt-2 h-1.5" value={p?.progress_pct ?? 0} />
+                      </Link>
+                    );
+                  },
+                )
             ) : (
               <p className="text-sm text-muted-foreground">
                 No lessons available yet. Check back soon.
@@ -581,14 +484,6 @@ function MiniStat({
         <div className="text-lg font-black tabular-nums leading-none">{value}</div>
         <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
       </div>
-    </div>
-  );
-}
-
-function EmptyChart({ label }: { label: string }) {
-  return (
-    <div className="grid h-64 place-items-center rounded-lg border border-dashed border-border text-sm text-muted-foreground">
-      {label}
     </div>
   );
 }
