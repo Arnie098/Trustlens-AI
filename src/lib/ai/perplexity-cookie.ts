@@ -51,13 +51,13 @@ function buildQuery(input: AnalysisInput): string {
         ? `Claim/text:\n${input.text.slice(0, 2500)}`
         : `Image label: ${input.imageName || "uploaded image"}`;
 
-  return `You are TrustLensAI (media literacy, not a truth oracle).
-Analyze this content and reply with ONLY one JSON object (no markdown, no prose):
+  return `You are TrustLensAI (media literacy analyst with live web search — not a truth oracle).
+Search the open web YOURSELF for corroboration, contradictions, and source reputation. Put findings in evidence/source_assessment/context_analysis. Do NOT tell the user to look up articles, reports, or independent sources as a substitute for your search.
+Reply with ONLY one JSON object (no markdown, no prose):
 
-{"trust_score":0-100,"category":"high_trust|needs_verification|low_confidence|potentially_misleading","confidence":0-100,"summary":"...","source_assessment":"...","context_analysis":"...","ai_generated_detected":false,"concerns":["..."],"evidence":["..."],"next_steps":["..."],"replay_data":[{"id":"origin","label":"...","platform":"Web","timestamp":"T+0h","reach":1,"warning":false,"connections":[]}]}
+{"trust_score":0-100,"category":"high_trust|needs_verification|low_confidence|potentially_misleading","confidence":0-100,"summary":"what claim is + what your search supports/weakens","source_assessment":"publisher credibility from your lookup","context_analysis":"framing / other coverage","ai_generated_detected":false,"concerns":["specific risks"],"evidence":["3-5 concrete findings with outlet/URL when available — not generic tips"],"next_steps":["2-4 habits to USE this analysis carefully — not 'go research elsewhere'"],"replay_data":[{"id":"origin","label":"...","platform":"Web","timestamp":"T+0h","reach":1,"warning":false,"connections":[]}]}
 
-Scoring: 80+ high_trust, 60-79 needs_verification, 40-59 low_confidence, <40 potentially_misleading.
-Use hedged language. Search the web if useful.
+Scoring: 80+ high_trust, 60-79 needs_verification, 40-59 low_confidence, <40 potentially_misleading. Hedged language.
 
 ${subject}`;
 }
@@ -308,20 +308,20 @@ export async function perplexityCookieAnalyze(input: AnalysisInput): Promise<Ana
       confidence: 55,
       // Never dump raw JSON into prose — normalizeResult/sanitize also unwrap
       summary: sanitizeAnalysisProse(answer.slice(0, 2000), "summary").slice(0, 600) ||
-        "Automated analysis completed. Independent verification is still recommended.",
+        "Automated analysis completed. See evidence and concerns below.",
       source_assessment:
-        "Source signals were reviewed with web-grounded analysis. Cross-check the original publisher when possible.",
+        "Source signals were reviewed with web-grounded analysis when available.",
       context_analysis:
         sanitizeAnalysisProse(answer.slice(0, 2000), "context_analysis").slice(0, 1200) ||
-        "Context review was limited. Look for missing dates, authors, and primary sources.",
+        "Context review was limited with the signals available for this run.",
       ai_generated_detected: /ai[- ]generated|deepfake|synthetic/.test(lower),
       concerns: ["Some analysis fields were inferred; treat the score as provisional."],
       // Empty evidence so normalizeResult folds filtered citations cleanly
       evidence: [],
       next_steps: [
-        "Cross-check with two independent sources",
-        "Open the original URL and inspect author, date, and citations",
-        "Pause before sharing if anything feels uncertain",
+        "Review the evidence list above before sharing or acting on the claim",
+        "Open any cited sources and check date, author, and full context",
+        "Pause before resharing if the summary still feels incomplete",
       ],
     },
     input,

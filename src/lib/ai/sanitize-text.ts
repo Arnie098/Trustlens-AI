@@ -131,7 +131,7 @@ export function sanitizeAnalysisProse(
       if (preferred && !looksLikeAnalysisJsonBlob(preferred)) return preferred.trim();
     }
     return preferredKey === "summary"
-      ? "Automated analysis completed. Review concerns and evidence below, and verify with independent sources."
+      ? "Automated analysis completed. Review concerns and evidence below."
       : "Details were incomplete in this analysis field. Review the summary, concerns, and evidence, or re-run verification.";
   }
 

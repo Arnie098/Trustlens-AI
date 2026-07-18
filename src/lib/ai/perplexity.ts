@@ -26,48 +26,55 @@ export function hasPerplexityKey(): boolean {
   return Boolean(process.env.PERPLEXITY_API_KEY?.trim());
 }
 
-export const SYSTEM_PROMPT = `You are TrustLensAI, a media and information literacy assistant.
-You do NOT declare absolute truth. You surface signals, evidence, and concerns so people can decide carefully.
+export const SYSTEM_PROMPT = `You are TrustLensAI, a media and information literacy analyst powered by live web search.
+You do NOT declare absolute truth. You gather signals, evidence, and concerns so people can decide carefully.
 
-Analyze the user's content (URL, text claim, or image description) using web search where useful.
+YOUR JOB (do this yourself — do NOT tell the user to do research you can do):
+1. Use web search to find relevant coverage: original reporting, fact-checks, official statements, and reputable secondary sources.
+2. Put what you found in the JSON fields below (with concrete findings and source names/URLs when available).
+3. Never answer with homework for the user like "look up separate reports", "search Google for articles", "find independent sources yourself", or "verify with two other outlets" as a substitute for your own search.
+4. If search turns up little, say so in summary/context_analysis and still fill evidence with what you did find (or that no corroboration was found).
+
 Return ONLY a single JSON object (no markdown fences, no prose outside JSON) with this exact shape:
 {
   "trust_score": <integer 0-100>,
   "category": <"high_trust"|"needs_verification"|"low_confidence"|"potentially_misleading">,
   "confidence": <number 0-100, one decimal ok>,
-  "summary": <string, 1-3 sentences, hedged language>,
-  "source_assessment": <string about publisher/author/domain credibility>,
-  "context_analysis": <string about framing, missing context, tone, citations>,
+  "summary": <string, 1-3 sentences: what the claim is and what your web search supports or weakens — hedged language>,
+  "source_assessment": <string: publisher/author/domain credibility based on what you looked up>,
+  "context_analysis": <string: framing, missing context, tone, how other sources treat the claim>,
   "ai_generated_detected": <boolean>,
-  "concerns": <string array, 0-5 items>,
-  "evidence": <string array, 0-5 items of supporting signals or citations>,
-  "next_steps": <string array, 2-4 practical verification actions>,
+  "concerns": <string array, 0-5 items — specific risks you identified>,
+  "evidence": <string array, 3-5 items — concrete findings FROM YOUR SEARCH (outlet + claim/finding; include URL when you have one). Not generic tips.>,
+  "next_steps": <string array, 2-4 items — how the user should USE this analysis carefully (e.g. pause before sharing, read full article, check date/author on the original). NOT "go research elsewhere" as the main action.>,
   "replay_data": <array of 3-5 nodes: {id, label, platform, timestamp, reach, warning, connections}>
 }
 
 Scoring guide (signals, not verdicts):
-- 80-100 high_trust: established outlets, clear sourcing, consistent with reputable reporting
-- 60-79 needs_verification: mixed signals or incomplete sourcing
-- 40-59 low_confidence: weak provenance, emotional framing, sparse evidence
-- 0-39 potentially_misleading: strong clickbait/conspiracy patterns, contradicted by reliable sources
+- 80-100 high_trust: established outlets, clear sourcing, consistent with reputable reporting you found
+- 60-79 needs_verification: mixed signals or incomplete sourcing after search
+- 40-59 low_confidence: weak provenance, emotional framing, sparse corroboration
+- 0-39 potentially_misleading: clickbait/conspiracy patterns, contradicted by reliable sources you found
 
-Always encourage independent verification. Prefer citing what you found on the open web.`;
+Evidence is your work product. next_steps are media-literacy habits after reading your findings — not a to-do list to re-do the analysis.`;
 
 export function buildUserPrompt(input: AnalysisInput): string {
+  const duty =
+    "Search the open web yourself. Report findings in evidence/source_assessment/context_analysis. Do not ask the user to hunt for articles or reports.";
   if (input.type === "url" && input.url) {
-    return `Verify this URL for media-literacy signals (origin, reputation, claim quality, missing context):\n${input.url}`;
+    return `${duty}\n\nAnalyze this URL (origin, reputation, claim quality, missing context, corroboration):\n${input.url}`;
   }
   if (input.type === "text" && input.text) {
-    return `Verify this claim or excerpt for media-literacy signals:\n"""\n${input.text.slice(0, 6000)}\n"""`;
+    return `${duty}\n\nAnalyze this claim or excerpt (corroboration, contradictions, provenance):\n"""\n${input.text.slice(0, 6000)}\n"""`;
   }
   // Image path: when we can send the actual image (imageUrl), instruct real visual inspection.
   if (input.imageUrl) {
     const caption = input.text?.trim()
       ? `\nText extracted from the image (OCR — may contain errors):\n"""\n${input.text.slice(0, 4000)}\n"""`
       : "";
-    return `Analyze the attached image for media-literacy and authenticity signals. Inspect the image itself for signs of AI generation, editing/compositing, or misleading framing, and assess any claims it makes.${caption}`;
+    return `${duty}\n\nAnalyze the attached image for media-literacy and authenticity signals. Inspect the image for AI generation, editing/compositing, or misleading framing, and assess any claims it makes — including web context for those claims.${caption}`;
   }
-  return `Analyze this image submission for media-literacy / authenticity signals. Filename or label: ${input.imageName || "uploaded image"}. Note limitations if you cannot see the binary image; use web knowledge about common AI-image and manipulation cues and reverse-image practice.`;
+  return `${duty}\n\nAnalyze this image submission for media-literacy / authenticity signals. Filename or label: ${input.imageName || "uploaded image"}. Note limitations if you cannot see the binary image; use web knowledge about common AI-image and manipulation cues.`;
 }
 
 type PerplexityContentPart =
@@ -212,6 +219,22 @@ function unwrapNestedAnalysis(raw: Record<string, unknown>): Record<string, unkn
   return obj;
 }
 
+/** True when a next_step dumps research work on the user instead of using our findings. */
+function isUserResearchHomework(step: string): boolean {
+  const s = step.toLowerCase();
+  const patterns = [
+    /search (the )?(web|google|bing|internet)/,
+    /look up (separate |other )?(article|report|source)/,
+    /find (two |2 |independent |other )?(credible )?sources/,
+    /cross-?check .{0,40}(yourself|on your own|independently)/,
+    /verify (this |the claim )?(yourself|independently|with (two|2|other|independent) sources)/,
+    /do your own research/,
+    /google the claim/,
+    /hunt for (articles|reports|evidence)/,
+  ];
+  return patterns.some((re) => re.test(s));
+}
+
 export function normalizeResult(
   raw: Record<string, unknown>,
   input: AnalysisInput,
@@ -255,9 +278,17 @@ export function normalizeResult(
   }
   if (!next_steps.length) {
     next_steps = [
-      "Cross-check the claim with two independent, credible sources",
-      "Search the exact quote to find original context",
-      "Pause before sharing if anything feels uncertain",
+      "Review the evidence list above before sharing or acting on the claim",
+      "Open any cited sources and check date, author, and full context",
+      "Pause before resharing if the summary still feels incomplete or uncertain",
+    ];
+  }
+  // Soft-filter "do our job for us" homework steps when the model still emits them
+  next_steps = next_steps.filter((s) => !isUserResearchHomework(s));
+  if (!next_steps.length) {
+    next_steps = [
+      "Review the evidence list above before sharing or acting on the claim",
+      "Open any cited sources and check date, author, and full context",
     ];
   }
 
@@ -268,21 +299,21 @@ export function normalizeResult(
     summary: sanitizeAnalysisProse(
       String(
         data.summary ||
-          "Automated web-grounded analysis completed. Verify with independent sources before sharing.",
+          "Automated web-grounded analysis completed. See evidence and concerns below.",
       ),
       "summary",
     ),
     source_assessment: sanitizeAnalysisProse(
       String(
         data.source_assessment ||
-          "Source assessment incomplete; check the original publisher.",
+          "Source assessment incomplete from available signals.",
       ),
       "source_assessment",
     ),
     context_analysis: sanitizeAnalysisProse(
       String(
         data.context_analysis ||
-          "Context review was limited. Look for missing dates, authors, and primary sources.",
+          "Context review was limited with the signals available for this run.",
       ),
       "context_analysis",
     ),
