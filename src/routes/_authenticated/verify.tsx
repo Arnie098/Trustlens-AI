@@ -8,11 +8,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertTriangle, ImageIcon, Loader2, ScanLine, Search, Type, Upload } from "lucide-react";
+import {
+  AlertTriangle,
+  ClipboardPaste,
+  ImageIcon,
+  Loader2,
+  ScanLine,
+  Search,
+  Type,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase, db } from "@/lib/db";
 import { useSession } from "@/lib/auth/session";
 import { ensureConsent, submitAndRedirect } from "@/lib/verify/submit";
+import { readClipboardText } from "@/lib/mobile/bridge";
 import { VerifyScanPanel } from "@/components/verify-scan-panel";
 
 const search = z.object({
@@ -33,8 +43,22 @@ function VerifyPage() {
   const { tab, prefill } = Route.useSearch();
   const initialTab: VerifyTab = tab === "text" || tab === "image" || tab === "scan" ? tab : "url";
   const [current, setCurrent] = useState<VerifyTab>(initialTab);
-  const urlPrefill = initialTab === "url" ? prefill : undefined;
-  const textPrefill = initialTab === "text" ? prefill : undefined;
+  // Clipboard seed remounts the target form with a fresh prefill (tap-only, no polling).
+  const [clipboardSeed, setClipboardSeed] = useState<{
+    tab: "url" | "text";
+    value: string;
+    nonce: number;
+  } | null>(null);
+  const [clipboardBusy, setClipboardBusy] = useState(false);
+
+  const urlPrefill =
+    clipboardSeed?.tab === "url" ? clipboardSeed.value : initialTab === "url" ? prefill : undefined;
+  const textPrefill =
+    clipboardSeed?.tab === "text"
+      ? clipboardSeed.value
+      : initialTab === "text"
+        ? prefill
+        : undefined;
   const scanPrefill = initialTab === "scan" ? prefill : undefined;
   const { profile, refresh } = useSession();
   const [consent, setConsent] = useState(Boolean(profile?.ai_consent));
@@ -44,19 +68,64 @@ function VerifyPage() {
     if (profile?.ai_consent) setConsent(true);
   }, [profile?.ai_consent]);
 
+  async function onVerifyClipboard() {
+    setClipboardBusy(true);
+    try {
+      const raw = await readClipboardText();
+      const value = raw.trim();
+      if (!value) {
+        toast.error("Copy a caption or link first.");
+        return;
+      }
+      if (/^https?:\/\//i.test(value)) {
+        setCurrent("url");
+        setClipboardSeed({ tab: "url", value, nonce: Date.now() });
+        toast.success("Link pasted into URL tab");
+      } else {
+        setCurrent("text");
+        setClipboardSeed({ tab: "text", value, nonce: Date.now() });
+        toast.success("Clipboard text pasted into Text tab");
+      }
+    } catch (e) {
+      console.warn(e);
+      toast.error("Could not read clipboard. Check browser permissions.");
+    } finally {
+      setClipboardBusy(false);
+    }
+  }
+
   return (
     <main className="relative mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-16">
       <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-muted-foreground animate-fade-in-slow">
         <span className="inline-block h-px w-8 bg-foreground/40" />
         <span>Analyze — one signal at a time</span>
       </div>
-      <h1 className="mt-6 font-display text-4xl font-semibold tracking-tight sm:text-5xl animate-fade-up delay-100">
-        Verify content
-      </h1>
-      <p className="mt-3 max-w-xl text-muted-foreground animate-fade-up delay-200">
-        Submit a URL, text passage, image, or scan. You'll get a transparent TrustScore with
-        evidence and concerns to review.
-      </p>
+      <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl animate-fade-up delay-100">
+            Verify content
+          </h1>
+          <p className="mt-3 max-w-xl text-muted-foreground animate-fade-up delay-200">
+            Submit a URL, text passage, image, or scan. You'll get a transparent TrustScore with
+            evidence and concerns to review.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          onClick={onVerifyClipboard}
+          disabled={clipboardBusy}
+          className="min-h-11 shrink-0 rounded-full border-teal/30 bg-background/50 animate-fade-up delay-200"
+        >
+          {clipboardBusy ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <ClipboardPaste className="mr-2 h-4 w-4 text-teal" />
+          )}
+          Verify clipboard
+        </Button>
+      </div>
 
       <div className="group relative mt-8 animate-scale-in delay-300">
         <Card className="glass relative overflow-hidden border-white/10 shadow-elegant transition-all duration-300 group-hover:-translate-y-0.5 group-hover:border-teal/40 group-hover:shadow-glow">
@@ -98,6 +167,7 @@ function VerifyPage() {
               </TabsList>
               <TabsContent value="url">
                 <UrlForm
+                  key={`url-${clipboardSeed?.tab === "url" ? clipboardSeed.nonce : "route"}-${urlPrefill ?? ""}`}
                   consent={consent}
                   setConsent={setConsent}
                   onConsented={refresh}
@@ -106,6 +176,7 @@ function VerifyPage() {
               </TabsContent>
               <TabsContent value="text">
                 <TextForm
+                  key={`text-${clipboardSeed?.tab === "text" ? clipboardSeed.nonce : "route"}-${textPrefill ?? ""}`}
                   consent={consent}
                   setConsent={setConsent}
                   onConsented={refresh}
