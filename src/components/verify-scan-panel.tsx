@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { capturePhoto, isNativePlatform, pickFromGallery } from "@/lib/mobile/bridge";
 import { prepareImageForAnalysis } from "@/lib/mobile/image-pipeline";
+import { OcrCancelledError, recognizeTextFromBlob } from "@/lib/mobile/ocr";
 import { supabase, db } from "@/lib/db";
 import { useSession } from "@/lib/auth/session";
 import { ensureConsent, submitAndRedirect } from "@/lib/verify/submit";
@@ -21,8 +22,7 @@ export interface VerifyScanPanelProps {
 }
 
 /**
- * Scan flow (design §5.3): capture/gallery → prepare → review → analyze.
- * OCR is wired in Task 8; until then the user can type/edit caption text.
+ * Scan flow (design §5.3): capture/gallery → prepare → OCR (optional) → review → analyze.
  */
 export function VerifyScanPanel({
   consent,
@@ -34,12 +34,14 @@ export function VerifyScanPanel({
   const navigate = useNavigate();
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const ocrAbortRef = useRef<AbortController | null>(null);
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [preparedBlob, setPreparedBlob] = useState<Blob | null>(null);
   const [fileName, setFileName] = useState("scan.jpg");
   const [caption, setCaption] = useState(initialCaption ?? "");
-  const [busy, setBusy] = useState<"camera" | "gallery" | "analyze" | null>(null);
+  const [ocrHint, setOcrHint] = useState<string | null>(null);
+  const [busy, setBusy] = useState<"camera" | "gallery" | "ocr" | "analyze" | null>(null);
   const [needConsent, setNeedConsent] = useState(false);
 
   // Revoke object URLs on change/unmount so repeated scans do not leak memory.
@@ -53,7 +55,20 @@ export function VerifyScanPanel({
     if (initialCaption) setCaption(initialCaption);
   }, [initialCaption]);
 
+  // Cancel in-flight OCR if the panel unmounts.
+  useEffect(() => {
+    return () => {
+      ocrAbortRef.current?.abort();
+    };
+  }, []);
+
+  function cancelOcr() {
+    ocrAbortRef.current?.abort();
+    ocrAbortRef.current = null;
+  }
+
   async function ingestBlob(blob: Blob, name: string) {
+    cancelOcr();
     const prepared = await prepareImageForAnalysis(blob);
     setPreparedBlob(prepared.blob);
     setFileName(name.replace(/[^a-z0-9.\-_]/gi, "_") || "scan.jpg");
@@ -61,6 +76,38 @@ export function VerifyScanPanel({
       if (prev) URL.revokeObjectURL(prev);
       return URL.createObjectURL(prepared.blob);
     });
+    setOcrHint(null);
+
+    // Still-image OCR on the prepared bitmap only (Task 8).
+    const ac = new AbortController();
+    ocrAbortRef.current = ac;
+    setBusy("ocr");
+    try {
+      const result = await recognizeTextFromBlob(prepared.blob, {
+        prepared: true,
+        signal: ac.signal,
+      });
+      if (ac.signal.aborted) return;
+      if (result.text) {
+        setCaption((prev) => (prev.trim() ? prev : result.text));
+        setOcrHint(
+          result.engine === "native"
+            ? "Text auto-read from image — edit if needed."
+            : "Text detected — edit if needed.",
+        );
+      } else {
+        setOcrHint(
+          "No auto-read available here. Type or paste any claim text you can see — vision still analyzes the image.",
+        );
+      }
+    } catch (e) {
+      if (e instanceof OcrCancelledError || ac.signal.aborted) return;
+      console.warn(e);
+      setOcrHint("Could not auto-read text. You can type a caption and continue.");
+    } finally {
+      if (ocrAbortRef.current === ac) ocrAbortRef.current = null;
+      setBusy((b) => (b === "ocr" ? null : b));
+    }
   }
 
   async function onTakePhoto() {
@@ -80,7 +127,7 @@ export function VerifyScanPanel({
       console.error(e);
       toast.error(e instanceof Error ? e.message : "Camera failed");
     } finally {
-      setBusy(null);
+      setBusy((b) => (b === "camera" ? null : b));
     }
   }
 
@@ -101,7 +148,7 @@ export function VerifyScanPanel({
       console.error(e);
       toast.error(e instanceof Error ? e.message : "Gallery failed");
     } finally {
-      setBusy(null);
+      setBusy((b) => (b === "gallery" ? null : b));
     }
   }
 
@@ -117,17 +164,20 @@ export function VerifyScanPanel({
     } catch (e) {
       console.error(e);
       toast.error(e instanceof Error ? e.message : "Could not prepare image");
-    } finally {
       setBusy(null);
     }
   }
 
   function clearCapture() {
+    cancelOcr();
     setPreparedBlob(null);
+    setOcrHint(null);
+    setCaption(initialCaption ?? "");
     setPreviewUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return null;
     });
+    setBusy(null);
   }
 
   async function onRunTrustLens() {
@@ -145,6 +195,7 @@ export function VerifyScanPanel({
       return;
     }
     setNeedConsent(false);
+    cancelOcr();
     setBusy("analyze");
     try {
       const ok = await ensureConsent(user.id, consent, onConsented);
@@ -223,13 +274,15 @@ export function VerifyScanPanel({
   }
 
   const capturing = busy === "camera" || busy === "gallery";
+  const reading = busy === "ocr";
   const analyzing = busy === "analyze";
+  const locked = capturing || reading || analyzing;
 
   return (
     <div className="mt-4 space-y-4">
       <p className="text-sm text-muted-foreground">
-        Capture a claim from a screen or photo. Review the image, add any text you can read, then
-        run TrustLens.
+        Capture a claim from a screen or photo. Review the image, edit any auto-read text, then run
+        TrustLens.
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -237,7 +290,7 @@ export function VerifyScanPanel({
           type="button"
           variant="outline"
           size="lg"
-          disabled={Boolean(busy)}
+          disabled={locked}
           onClick={onTakePhoto}
           className="min-h-11 justify-start gap-3 rounded-xl border-border/80 bg-background/50"
         >
@@ -252,7 +305,7 @@ export function VerifyScanPanel({
           type="button"
           variant="outline"
           size="lg"
-          disabled={Boolean(busy)}
+          disabled={locked}
           onClick={onChooseScreenshot}
           className="min-h-11 justify-start gap-3 rounded-xl border-border/80 bg-background/50"
         >
@@ -310,6 +363,13 @@ export function VerifyScanPanel({
             </Button>
           </div>
 
+          {reading && (
+            <div className="flex items-center gap-2 rounded-lg border border-teal/20 bg-teal/5 px-3 py-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-teal" />
+              Reading text…
+            </div>
+          )}
+
           <div>
             <Label htmlFor="scan-caption">Text from image (optional)</Label>
             <Textarea
@@ -319,13 +379,10 @@ export function VerifyScanPanel({
               placeholder="Type or paste any claim text visible in the image…"
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
-              disabled={analyzing}
+              disabled={analyzing || reading}
               className="mt-1.5"
             />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Auto-read arrives in a later update. For now, add text if you can read it — vision
-              still analyzes the image.
-            </p>
+            {ocrHint && !reading && <p className="mt-1 text-xs text-muted-foreground">{ocrHint}</p>}
           </div>
         </div>
       ) : (
@@ -363,13 +420,17 @@ export function VerifyScanPanel({
       <Button
         type="button"
         size="lg"
-        disabled={!preparedBlob || analyzing || capturing}
+        disabled={!preparedBlob || locked}
         onClick={onRunTrustLens}
         className="min-h-11 min-w-[12rem] rounded-full shadow-glow transition-transform hover:scale-[1.02]"
       >
         {analyzing ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing…
+          </>
+        ) : reading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Reading text…
           </>
         ) : (
           "Run TrustLens"
