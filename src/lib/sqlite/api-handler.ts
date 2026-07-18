@@ -16,12 +16,19 @@ import {
   type QueryRequest,
 } from "./server-db";
 
+const corsHeaders: Record<string, string> = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-headers": "content-type, authorization, apikey",
+};
+
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
+      ...corsHeaders,
     },
   });
 }
@@ -31,6 +38,11 @@ export async function handleLocalApi(request: Request): Promise<Response> {
   const path = url.pathname.replace(/\/+$/, "") || "/";
 
   try {
+    // Mobile Expo web (localhost:8081) → API (localhost:3000) preflight
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders });
+    }
+
     if (path === "/api/local/health" && request.method === "GET") {
       return json({ ok: true, provider: "sqlite" });
     }
