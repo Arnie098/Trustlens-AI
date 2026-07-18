@@ -1,18 +1,30 @@
 import { analyzeContentServer, analyzeProviderInfo } from "./analyze.server";
 import type { AnalysisInput } from "./types";
 
+const corsHeaders: Record<string, string> = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-headers": "content-type, authorization, apikey",
+};
+
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
+      ...corsHeaders,
     },
   });
 }
 
 export async function handleAnalyzeApi(request: Request): Promise<Response> {
   try {
+    // Mobile Expo web (different origin) preflight
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders });
+    }
+
     if (request.method === "GET") {
       return json({ ok: true, ...analyzeProviderInfo() });
     }
