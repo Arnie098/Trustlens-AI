@@ -9,6 +9,8 @@ export interface AnalysisInput {
   url?: string;
   text?: string;
   imageName?: string;
+  /** Fetchable image URL (e.g. signed Supabase URL) for vision-capable analysis. */
+  imageUrl?: string;
 }
 
 export interface AnalysisResult {

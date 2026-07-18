@@ -152,10 +152,39 @@ export default function VerifyScreen() {
         .single();
       if (upDbErr) throw new Error(upDbErr.message);
 
-      if (ocrHint.trim().length >= 10) {
+      // Signed URL lets the server-side vision model actually see the image.
+      // Short TTL: only needs to live for the single analyze request.
+      let imageUrl: string | undefined;
+      try {
+        const { data: signed } = await db.storage
+          .from("verification-uploads")
+          .createSignedUrl(path, 300);
+        imageUrl = signed?.signedUrl;
+      } catch {
+        /* fall back to OCR-text / label-only analysis below */
+      }
+
+      const caption = ocrHint.trim();
+
+      // Prefer real visual analysis when we have a fetchable image URL — fold in
+      // OCR text as extra context rather than discarding the image.
+      if (imageUrl) {
+        const id = await submitVerification(user.id, {
+          type: "image",
+          input_text: caption.length ? caption : undefined,
+          imageName,
+          imageUrl,
+          uploaded_content_id: uploaded?.id,
+        });
+        router.push(`/(app)/verify/${id}`);
+        return;
+      }
+
+      // No signed URL — degrade to OCR text when we have enough, else label-only.
+      if (caption.length >= 10) {
         const id = await submitVerification(user.id, {
           type: "text",
-          input_text: ocrHint.trim(),
+          input_text: caption,
           imageName,
           uploaded_content_id: uploaded?.id,
         });

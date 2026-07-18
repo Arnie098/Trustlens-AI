@@ -1,6 +1,14 @@
 import { useLocalSearchParams, router } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  Pressable,
+  Linking,
+} from "react-native";
 import { db } from "@/src/lib/db";
 import { useSession } from "@/src/features/auth/session";
 import { Screen, Card, Muted, Title, SectionLabel } from "@/src/components/ui";
@@ -21,7 +29,35 @@ type ResultRow = {
   evidence: string[] | null;
   next_steps: string[] | null;
   replay_data: ReplayNode[] | null;
+  provider: "perplexity" | "mock" | null;
 };
+
+const URL_RE = /(https?:\/\/[^\s)]+)/i;
+
+/** Split stored evidence into plain signals and citation URLs (stored as "Citation: <url>"). */
+function splitEvidence(evidence: string[] | null | undefined) {
+  const signals: string[] = [];
+  const sources: string[] = [];
+  for (const item of evidence ?? []) {
+    const match = item.match(URL_RE);
+    if (/^\s*citation\s*:/i.test(item) && match) {
+      sources.push(match[1]);
+    } else if (match && item.trim() === match[1]) {
+      sources.push(match[1]);
+    } else {
+      signals.push(item);
+    }
+  }
+  return { signals, sources: Array.from(new Set(sources)) };
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
 
 export default function VerifyResultScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -66,6 +102,13 @@ export default function VerifyResultScreen() {
   }
 
   const r = q.data;
+  const { signals, sources } = splitEvidence(r.evidence);
+  const isLive = r.provider === "perplexity";
+  const providerLabel = r.provider
+    ? isLive
+      ? "Live AI analysis"
+      : "Offline heuristic"
+    : null;
   const list = (items: string[] | null | undefined) =>
     (items ?? []).map((item, i) => (
       <Text key={i} style={styles.bullet}>
@@ -81,6 +124,34 @@ export default function VerifyResultScreen() {
         <View style={styles.gaugeWrap}>
           <TrustGauge score={r.trust_score} category={r.category} />
           <Muted>Confidence {confidencePercent(r.confidence)}%</Muted>
+          {providerLabel ? (
+            <View
+              style={[
+                styles.providerBadge,
+                { borderColor: isLive ? colors.teal : colors.trustMedium },
+              ]}
+            >
+              <View
+                style={[
+                  styles.providerDot,
+                  { backgroundColor: isLive ? colors.teal : colors.trustMedium },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.providerText,
+                  { color: isLive ? colors.teal : colors.trustMedium },
+                ]}
+              >
+                {providerLabel}
+              </Text>
+            </View>
+          ) : null}
+          {!isLive && r.provider === "mock" ? (
+            <Muted style={styles.providerNote}>
+              Live analysis was unavailable — this score is a heuristic estimate. Verify independently.
+            </Muted>
+          ) : null}
           {r.ai_generated_detected ? (
             <Text style={styles.aiFlag}>Possible AI-generated signals detected</Text>
           ) : null}
@@ -103,10 +174,27 @@ export default function VerifyResultScreen() {
             {list(r.concerns)}
           </Card>
         ) : null}
-        {(r.evidence?.length ?? 0) > 0 ? (
+        {signals.length > 0 ? (
           <Card>
             <Text style={styles.h}>Evidence</Text>
-            {list(r.evidence)}
+            {list(signals)}
+          </Card>
+        ) : null}
+        {sources.length > 0 ? (
+          <Card>
+            <Text style={styles.h}>Sources</Text>
+            {sources.map((url) => (
+              <Pressable
+                key={url}
+                onPress={() => void Linking.openURL(url)}
+                style={styles.sourceRow}
+              >
+                <Text style={styles.sourceHost}>{hostOf(url)}</Text>
+                <Text style={styles.sourceUrl} numberOfLines={1}>
+                  {url}
+                </Text>
+              </Pressable>
+            ))}
           </Card>
         ) : null}
         {(r.next_steps?.length ?? 0) > 0 ? (
@@ -143,10 +231,29 @@ const styles = StyleSheet.create({
   center: { alignItems: "center", justifyContent: "center" },
   content: { paddingHorizontal: 20, paddingBottom: 48, gap: 12, paddingTop: 8 },
   gaugeWrap: { alignItems: "center", gap: 8, marginVertical: 8 },
+  providerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  providerDot: { width: 7, height: 7, borderRadius: 4 },
+  providerText: { fontSize: 12, fontWeight: "700", letterSpacing: 0.3 },
+  providerNote: { textAlign: "center", maxWidth: 300, fontSize: 12 },
   aiFlag: { color: colors.trustMedium, fontWeight: "600", fontSize: 13 },
   h: { fontSize: 15, fontWeight: "700", color: colors.foreground, marginBottom: 8 },
   body: { fontSize: 15, color: colors.foreground, lineHeight: 22 },
   bullet: { fontSize: 14, color: colors.foreground, lineHeight: 22, marginBottom: 4 },
+  sourceRow: {
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  sourceHost: { fontSize: 14, fontWeight: "700", color: colors.teal },
+  sourceUrl: { fontSize: 12, color: colors.muted, marginTop: 2 },
   replayRow: {
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,

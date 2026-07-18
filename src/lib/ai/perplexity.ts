@@ -60,7 +60,30 @@ export function buildUserPrompt(input: AnalysisInput): string {
   if (input.type === "text" && input.text) {
     return `Verify this claim or excerpt for media-literacy signals:\n"""\n${input.text.slice(0, 6000)}\n"""`;
   }
+  // Image path: when we can send the actual image (imageUrl), instruct real visual inspection.
+  if (input.imageUrl) {
+    const caption = input.text?.trim()
+      ? `\nText extracted from the image (OCR — may contain errors):\n"""\n${input.text.slice(0, 4000)}\n"""`
+      : "";
+    return `Analyze the attached image for media-literacy and authenticity signals. Inspect the image itself for signs of AI generation, editing/compositing, or misleading framing, and assess any claims it makes.${caption}`;
+  }
   return `Analyze this image submission for media-literacy / authenticity signals. Filename or label: ${input.imageName || "uploaded image"}. Note limitations if you cannot see the binary image; use web knowledge about common AI-image and manipulation cues and reverse-image practice.`;
+}
+
+type PerplexityContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
+/** User message content: multimodal parts when an image URL is available, else a plain string. */
+export function buildUserContent(input: AnalysisInput): string | PerplexityContentPart[] {
+  const prompt = buildUserPrompt(input);
+  if (input.type === "image" && input.imageUrl) {
+    return [
+      { type: "text", text: prompt },
+      { type: "image_url", image_url: { url: input.imageUrl } },
+    ];
+  }
+  return prompt;
 }
 
 function defaultReplay(input: AnalysisInput, category: TrustCategory): ReplayNode[] {
@@ -285,7 +308,7 @@ export async function perplexityAnalyze(input: AnalysisInput): Promise<AnalysisR
     max_tokens: 2048,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: buildUserPrompt(input) },
+      { role: "user", content: buildUserContent(input) },
     ],
   };
 

@@ -7,6 +7,7 @@ export type SubmitPayload = {
   input_url?: string | null;
   input_text?: string | null;
   imageName?: string;
+  imageUrl?: string;
   uploaded_content_id?: string;
 };
 
@@ -50,6 +51,7 @@ export async function submitVerification(userId: string, payload: SubmitPayload)
     url: payload.input_url ?? undefined,
     text: payload.input_text ?? undefined,
     imageName: payload.imageName,
+    imageUrl: payload.imageUrl,
   };
 
   let result;
@@ -65,7 +67,7 @@ export async function submitVerification(userId: string, payload: SubmitPayload)
       ? [...result.evidence, ...result.citations.slice(0, 3).map((c) => `Citation: ${c}`)]
       : result.evidence;
 
-  const { error: saveErr } = await db.from("verification_results").insert({
+  const resultRow = {
     request_id: req.id,
     user_id: userId,
     trust_score: result.trust_score,
@@ -79,7 +81,15 @@ export async function submitVerification(userId: string, payload: SubmitPayload)
     evidence: evidence ?? [],
     next_steps: result.next_steps ?? [],
     replay_data: result.replay_data ?? null,
-  });
+    provider: result.provider ?? null,
+  };
+
+  let saveErr = (await db.from("verification_results").insert(resultRow)).error;
+  // `provider` column may not be migrated on older backends — retry without it.
+  if (saveErr && /provider/i.test(saveErr.message)) {
+    const { provider: _omit, ...withoutProvider } = resultRow;
+    saveErr = (await db.from("verification_results").insert(withoutProvider)).error;
+  }
 
   if (saveErr) {
     console.warn("[submit] save result:", saveErr);
