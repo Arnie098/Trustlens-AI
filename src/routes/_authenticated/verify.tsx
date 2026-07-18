@@ -8,17 +8,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertTriangle, ImageIcon, Loader2, Search, Type, Upload } from "lucide-react";
+import { AlertTriangle, ImageIcon, Loader2, ScanLine, Search, Type, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { supabase, db } from "@/lib/db";
 import { useSession } from "@/lib/auth/session";
-import { analyzeContent } from "@/lib/ai/analyze";
+import { ensureConsent, submitAndRedirect } from "@/lib/verify/submit";
+import { VerifyScanPanel } from "@/components/verify-scan-panel";
 
 const search = z.object({
   tab: z.enum(["url", "text", "image", "scan"]).optional(),
   source: z.enum(["clipboard", "share", "overlay", "camera", "gallery"]).optional(),
   prefill: z.string().optional(),
 });
+
+type VerifyTab = "url" | "text" | "image" | "scan";
 
 export const Route = createFileRoute("/_authenticated/verify")({
   validateSearch: (s) => search.parse(s),
@@ -28,11 +31,11 @@ export const Route = createFileRoute("/_authenticated/verify")({
 
 function VerifyPage() {
   const { tab, prefill } = Route.useSearch();
-  // "scan" (built in a later task) and any non-url/text/image value fall back to "url".
-  const initialTab = tab === "text" || tab === "image" ? tab : "url";
-  const [current, setCurrent] = useState<"url" | "text" | "image">(initialTab);
+  const initialTab: VerifyTab = tab === "text" || tab === "image" || tab === "scan" ? tab : "url";
+  const [current, setCurrent] = useState<VerifyTab>(initialTab);
   const urlPrefill = initialTab === "url" ? prefill : undefined;
   const textPrefill = initialTab === "text" ? prefill : undefined;
+  const scanPrefill = initialTab === "scan" ? prefill : undefined;
   const { profile, refresh } = useSession();
   const [consent, setConsent] = useState(Boolean(profile?.ai_consent));
 
@@ -51,8 +54,8 @@ function VerifyPage() {
         Verify content
       </h1>
       <p className="mt-3 max-w-xl text-muted-foreground animate-fade-up delay-200">
-        Submit a URL, text passage, or image. You'll get a transparent TrustScore with evidence and
-        concerns to review.
+        Submit a URL, text passage, image, or scan. You'll get a transparent TrustScore with
+        evidence and concerns to review.
       </p>
 
       <div className="group relative mt-8 animate-scale-in delay-300">
@@ -74,8 +77,8 @@ function VerifyPage() {
             <CardDescription>Choose the type of content to analyze.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs value={current} onValueChange={(v) => setCurrent(v as "url" | "text" | "image")}>
-              <TabsList className="grid w-full grid-cols-3 bg-background/40">
+            <Tabs value={current} onValueChange={(v) => setCurrent(v as VerifyTab)}>
+              <TabsList className="grid w-full grid-cols-2 gap-1 bg-background/40 sm:grid-cols-4">
                 <TabsTrigger value="url" className="data-[state=active]:shadow-glow">
                   <Search className="mr-2 h-4 w-4" />
                   URL
@@ -87,6 +90,10 @@ function VerifyPage() {
                 <TabsTrigger value="image" className="data-[state=active]:shadow-glow">
                   <ImageIcon className="mr-2 h-4 w-4" />
                   Image
+                </TabsTrigger>
+                <TabsTrigger value="scan" className="data-[state=active]:shadow-glow">
+                  <ScanLine className="mr-2 h-4 w-4" />
+                  Scan
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="url">
@@ -107,6 +114,14 @@ function VerifyPage() {
               </TabsContent>
               <TabsContent value="image">
                 <ImageForm consent={consent} setConsent={setConsent} onConsented={refresh} />
+              </TabsContent>
+              <TabsContent value="scan">
+                <VerifyScanPanel
+                  consent={consent}
+                  setConsent={setConsent}
+                  onConsented={refresh}
+                  initialCaption={scanPrefill}
+                />
               </TabsContent>
             </Tabs>
           </CardContent>
@@ -160,144 +175,6 @@ function ConsentRow({
       </span>
     </label>
   );
-}
-
-async function ensureConsent(
-  userId: string,
-  consent: boolean,
-  onConsented: () => void | Promise<void>,
-) {
-  if (!consent) {
-    toast.error("Please check the AI-processing consent box first.");
-    return false;
-  }
-  try {
-    await db.from("consent_records").insert({
-      user_id: userId,
-      granted: true,
-      scope: "ai_processing",
-    });
-    const { error } = await db
-      .from("profiles")
-      .update({ ai_consent: true, ai_consent_at: new Date().toISOString() })
-      .eq("id", userId);
-    if (error) console.warn("[verify] profile consent update:", error);
-    await onConsented();
-  } catch (e) {
-    console.warn("[verify] consent save failed (continuing):", e);
-  }
-  return true;
-}
-
-async function submitAndRedirect(
-  navigate: ReturnType<typeof useNavigate>,
-  userId: string,
-  payload: {
-    type: "url" | "text" | "image";
-    input_url?: string | null;
-    input_text?: string | null;
-    imageName?: string;
-    uploaded_content_id?: string;
-  },
-) {
-  const toastId = toast.loading("Creating verification…");
-
-  const { data: req, error } = await db
-    .from("verification_requests")
-    .insert({
-      user_id: userId,
-      type: payload.type,
-      input_url: payload.input_url ?? null,
-      input_text: payload.input_text ?? null,
-      uploaded_content_id: payload.uploaded_content_id ?? null,
-      status: "processing",
-    })
-    .select()
-    .single();
-
-  if (error || !req?.id) {
-    toast.error(error?.message ?? "Failed to create verification request", { id: toastId });
-    return;
-  }
-
-  toast.loading("Analyzing content (this can take up to 30s)…", { id: toastId });
-
-  let result;
-  try {
-    result = await analyzeContent({
-      type: payload.type,
-      url: payload.input_url ?? undefined,
-      text: payload.input_text ?? undefined,
-      imageName: payload.imageName,
-    });
-  } catch (e) {
-    await db.from("verification_requests").update({ status: "failed" }).eq("id", req.id);
-    toast.error(e instanceof Error ? e.message : "Analysis failed", { id: toastId });
-    return;
-  }
-
-  // Final display/storage pass — never persist raw JSON blobs as prose
-  const { sanitizeAnalysisProse, sanitizeDisplayList } = await import("@/lib/ai/sanitize-text");
-  const summary = sanitizeAnalysisProse(result.summary, "summary");
-  const source_assessment = sanitizeAnalysisProse(
-    result.source_assessment,
-    "source_assessment",
-  );
-  const context_analysis = sanitizeAnalysisProse(
-    result.context_analysis,
-    "context_analysis",
-  );
-  const concerns = sanitizeDisplayList(result.concerns);
-  const evidence = sanitizeDisplayList(result.evidence);
-  const next_steps = sanitizeDisplayList(result.next_steps);
-
-  toast.loading("Saving results…", { id: toastId });
-
-  const { data: saved, error: saveErr } = await db
-    .from("verification_results")
-    .insert({
-      request_id: req.id,
-      user_id: userId,
-      trust_score: result.trust_score,
-      category: result.category,
-      confidence: result.confidence,
-      summary,
-      source_assessment,
-      context_analysis,
-      ai_generated_detected: result.ai_generated_detected,
-      concerns,
-      evidence,
-      next_steps,
-      replay_data: result.replay_data ?? null,
-    })
-    .select()
-    .single();
-
-  if (saveErr || !saved) {
-    toast.error(saveErr?.message ?? "Failed to save analysis results", { id: toastId });
-    // Still try to open the page — request exists
-    navigate({ to: "/verify/$id", params: { id: req.id } });
-    return;
-  }
-
-  await db.from("verification_requests").update({ status: "completed" }).eq("id", req.id);
-
-  try {
-    const { data: badge } = await db
-      .from("badges")
-      .select("id")
-      .eq("slug", "first-verification")
-      .maybeSingle();
-    if (badge?.id) {
-      await db.from("user_badges").insert({ user_id: userId, badge_id: badge.id });
-    }
-  } catch {
-    /* badge is optional */
-  }
-
-  toast.success("Analysis complete — opening results…", { id: toastId });
-  // Use full navigation so results always mount (flat /verify/$id route)
-  await navigate({ to: "/verify/$id", params: { id: req.id }, replace: true });
 }
 
 function UrlForm({ consent, setConsent, onConsented, initialValue }: FormProps) {
