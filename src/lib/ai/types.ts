@@ -7,6 +7,8 @@ export interface AnalysisInput {
   url?: string;
   text?: string;
   imageName?: string;
+  /** Fetchable image URL (e.g. signed Supabase URL) for vision-capable analysis. */
+  imageUrl?: string;
 }
 
 export interface AnalysisResult {
@@ -22,7 +24,7 @@ export interface AnalysisResult {
   next_steps: string[];
   replay_data: ReplayNode[];
   /** Public engine label only — never expose internal transport details */
-  provider?: "perplexity" | "mock";
+  provider?: "perplexity" | "mock" | "claude";
   citations?: string[];
 }
 

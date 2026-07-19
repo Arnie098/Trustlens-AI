@@ -33,3 +33,14 @@ services:
         value: "1"
       - key: PERPLEXITY_COOKIES
         sync: false
+      # Optional: official Perplexity for text + vision
+      - key: PERPLEXITY_API_KEY
+        sync: false
+      # Mobile screenshot vision (when no Perplexity key): Claude / Anthropic
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Optional alias
+      - key: CLAUDE_API_KEY
+        sync: false
+      - key: CLAUDE_VISION_MODEL
+        sync: false

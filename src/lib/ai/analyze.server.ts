@@ -1,16 +1,16 @@
 /**
  * Server-side content analysis.
  *
- * Hackathon free path (default when configured, no paid Perplexity key):
- *   DEEPSEEK_API_KEY + PERPLEXITY_COOKIES
- *   → DeepSeek drafts claims → Perplexity website session does live web search
+ * Mobile screenshot (imageUrl) vision priority:
+ *   1) PERPLEXITY_API_KEY → Sonar vision
+ *   2) ANTHROPIC_API_KEY / CLAUDE_API_KEY → Claude vision (screenshot-only path)
+ *   3) OCR/text via free DeepSeek + cookies
  *
- * Optional paid:
- *   PERPLEXITY_API_KEY → official Sonar (true vision + search)
- *
- * Public provider labels: "perplexity" | "mock" only (never leak cookies/DeepSeek).
+ * Text/url paths: free DeepSeek+cookies or Perplexity text API.
+ * Public provider labels: perplexity | claude | mock.
  */
 import { mockAnalyze } from "./mock-analyze";
+import { claudeVisionAnalyze, hasClaudeKey } from "./claude-vision";
 import { deepseekAnalyze, hasDeepSeekKey } from "./deepseek";
 import {
   canUseFreeDeepSeekPerplexityPipeline,
@@ -22,7 +22,7 @@ import { sanitizeAnalysisProse, sanitizeDisplayList } from "./sanitize-text";
 import type { AnalysisInput, AnalysisResult } from "./types";
 
 /** What the browser / API clients are allowed to see. */
-export type PublicProvider = "perplexity" | "mock";
+export type PublicProvider = "perplexity" | "mock" | "claude";
 
 function asPublicResult(result: AnalysisResult, provider: PublicProvider): AnalysisResult {
   return {
@@ -73,45 +73,34 @@ function useFreeHybridPipeline(): boolean {
 export async function analyzeContentServer(input: AnalysisInput): Promise<AnalysisResult> {
   const requiresVision = input.type === "image" && Boolean(input.imageUrl?.trim());
 
-  // 1) Pixel vision FIRST when a fetchable imageUrl is present.
+  // 1) Mobile screenshot vision — Perplexity if key present
   if (requiresVision && hasPerplexityKey()) {
     try {
       return asPublicResult(await perplexityAnalyze(input), "perplexity");
     } catch (err) {
       console.error("[analyze] Perplexity vision path failed:", err);
-      // Last resort for mobile screenshots: analyze OCR/caption text rather than 500.
-      // Never invent vision — mark the summary clearly.
-      const ocr = input.text?.trim();
-      if (ocr && ocr.length >= 20) {
+      // Prefer Claude for screenshots if available before OCR-only
+      if (hasClaudeKey()) {
         try {
-          const textResult = await perplexityAnalyze({
-            type: "text",
-            text:
-              "The following text was extracted from a mobile social screenshot (OCR / helper). " +
-              "Analyze the post content itself (not the fact it is a screenshot):\n\n" +
-              ocr.slice(0, 5500),
-          });
-          return asPublicResult(
-            {
-              ...textResult,
-              summary: `${textResult.summary} (On-screen text only — image vision failed.)`,
-              confidence: Math.min(textResult.confidence, 70),
-            },
-            "perplexity",
-          );
-        } catch (textErr) {
-          console.error("[analyze] OCR text fallback also failed:", textErr);
+          return asPublicResult(await claudeVisionAnalyze(input), "claude");
+        } catch (claudeErr) {
+          console.error("[analyze] Claude vision fallback failed:", claudeErr);
         }
       }
-      throw err instanceof Error
-        ? err
-        : new Error("Vision analysis failed for the uploaded screenshot.");
     }
   }
 
-  // 1b) Screenshot without paid vision key: analyze OCR / caption text via free web path.
-  // True pixel vision needs PERPLEXITY_API_KEY; cookie/DeepSeek paths cannot open images.
-  if (requiresVision && !hasPerplexityKey()) {
+  // 1a) Claude vision — screenshot/imageUrl only (when no Perplexity key, or after it failed)
+  if (requiresVision && hasClaudeKey()) {
+    try {
+      return asPublicResult(await claudeVisionAnalyze(input), "claude");
+    } catch (err) {
+      console.error("[analyze] Claude vision path failed:", err);
+    }
+  }
+
+  // 1b) Screenshot without any vision key: OCR / caption text via free web path
+  if (requiresVision) {
     const ocr = input.text?.trim() || "";
     const textForAnalysis =
       ocr.length >= 12
@@ -125,7 +114,7 @@ export async function analyzeContentServer(input: AnalysisInput): Promise<Analys
     const textInput: AnalysisInput = { type: "text", text: textForAnalysis };
     const mark = (r: AnalysisResult): AnalysisResult => ({
       ...r,
-      summary: `${r.summary} (Text from screen only — set PERPLEXITY_API_KEY for full image vision.)`,
+      summary: `${r.summary} (Text from screen only — set ANTHROPIC_API_KEY or PERPLEXITY_API_KEY for image vision.)`,
       confidence: Math.min(r.confidence, 75),
     });
 
@@ -150,7 +139,6 @@ export async function analyzeContentServer(input: AnalysisInput): Promise<Analys
         console.error("[analyze] Screenshot OCR DeepSeek path failed:", err);
       }
     }
-    // Last resort mock rather than a hard 500
     return asPublicResult(mark(await mockAnalyze(textInput)), "mock");
   }
 
@@ -209,22 +197,37 @@ export function analyzeProviderInfo(): {
   provider: PublicProvider;
   engine: string;
   vision: boolean;
+  screenshot_vision?: "perplexity" | "claude" | "none";
   free_pipeline?: boolean;
 } {
+  const screenshotVision = hasPerplexityKey()
+    ? "perplexity"
+    : hasClaudeKey()
+      ? "claude"
+      : "none";
+  const vision = screenshotVision !== "none";
+
   if (canUseFreeDeepSeekPerplexityPipeline()) {
     return {
       provider: "perplexity",
       engine: "deepseek+web",
-      // Pixel vision still needs official Perplexity API; free path uses OCR + web search
-      vision: hasPerplexityKey(),
+      vision,
+      screenshot_vision: screenshotVision,
       free_pipeline: true,
     };
   }
-  if (hasPerplexityKey() || hasPerplexityCookies() || hasDeepSeekKey()) {
+  if (hasPerplexityKey() || hasClaudeKey() || hasPerplexityCookies() || hasDeepSeekKey()) {
     return {
-      provider: "perplexity",
-      engine: hasPerplexityKey() ? "perplexity" : hasDeepSeekKey() ? "deepseek" : "web",
-      vision: hasPerplexityKey(),
+      provider: hasPerplexityKey() ? "perplexity" : hasClaudeKey() ? "claude" : "perplexity",
+      engine: hasPerplexityKey()
+        ? "perplexity"
+        : hasClaudeKey()
+          ? "claude-vision"
+          : hasDeepSeekKey()
+            ? "deepseek"
+            : "web",
+      vision,
+      screenshot_vision: screenshotVision,
       free_pipeline: false,
     };
   }
@@ -232,5 +235,6 @@ export function analyzeProviderInfo(): {
     provider: "mock",
     engine: "heuristic",
     vision: false,
+    screenshot_vision: "none",
   };
 }
