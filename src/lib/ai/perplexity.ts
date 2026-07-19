@@ -2,9 +2,17 @@
  * Perplexity Sonar — web-grounded media literacy analysis.
  * Server-only: uses PERPLEXITY_API_KEY (never expose to the browser).
  *
- * Screenshot flow: public imageUrl is sent to Perplexity; their API fetches the image.
- * PERPLEXITY_API_KEY authenticates our call to Perplexity (required for any API use).
+ * Screenshot flow (hybrid — what actually works):
+ *   1) Phone uploads → public URL at /api/uploads (audit / re-fetch)
+ *   2) Server loads image bytes (disk preferred) → data:image/...;base64,...
+ *   3) Perplexity chat message gets image_url = data URI
+ *
+ * Why not only public URL? Sonar often does NOT fetch remote image URLs and
+ * answers from the filename/OCR only ("without examining the content directly").
+ * Embedding bytes forces vision. PERPLEXITY_API_KEY is still required to call the API.
  */
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   categoryFor,
   type AnalysisInput,
@@ -110,21 +118,80 @@ type PerplexityContentPart =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string } };
 
+const MAX_VISION_BYTES = 4 * 1024 * 1024;
+
+function uploadsDir(): string {
+  return process.env.UPLOADS_DIR?.trim() || join(process.cwd(), "data", "uploads");
+}
+
+function mimeFromName(name: string): string {
+  const n = name.toLowerCase();
+  if (n.endsWith(".png")) return "image/png";
+  if (n.endsWith(".webp")) return "image/webp";
+  if (n.endsWith(".gif")) return "image/gif";
+  return "image/jpeg";
+}
+
+function toDataUri(buf: Buffer, mime: string): string {
+  if (buf.byteLength < 64) throw new Error("Vision image empty or too small");
+  if (buf.byteLength > MAX_VISION_BYTES) {
+    throw new Error(`Vision image too large (${buf.byteLength} bytes; max ${MAX_VISION_BYTES})`);
+  }
+  return `data:${mime};base64,${buf.toString("base64")}`;
+}
+
 /**
- * Mobile screenshot pipeline (as designed):
- *   phone uploads → server public HTTPS URL → Perplexity fetches that URL.
- *
- * We pass the public imageUrl in the multimodal message so Perplexity's
- * servers GET the image themselves. No base64 embed required.
+ * Turn a public /api/uploads URL into an inline data URI for Perplexity vision.
+ * Reads local disk first (same host as upload) so we never depend on Perplexity
+ * fetching our URL or on Render self-HTTP.
  */
-export function buildUserContent(input: AnalysisInput): string | PerplexityContentPart[] {
+export async function resolveVisionDataUri(imageUrl: string): Promise<string> {
+  try {
+    const u = new URL(imageUrl);
+    const m = u.pathname.match(/\/api\/uploads\/(tl_[a-f0-9]+\.(jpe?g|png|webp|gif))$/i);
+    if (m) {
+      const full = join(uploadsDir(), m[1]);
+      const buf = await readFile(full);
+      console.info(`[perplexity] vision bytes from disk ${m[1]} (${buf.byteLength} B)`);
+      return toDataUri(buf, mimeFromName(m[1]));
+    }
+  } catch (err) {
+    console.warn("[perplexity] disk read for upload failed:", err);
+  }
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 25_000);
+  try {
+    const res = await fetch(imageUrl, {
+      method: "GET",
+      headers: { Accept: "image/*,*/*" },
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      throw new Error(`Could not load image (${res.status}) ${imageUrl.slice(0, 100)}`);
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    const ct = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+    const mime =
+      ct.startsWith("image/") && !ct.includes("svg") ? ct : mimeFromName(imageUrl);
+    console.info(`[perplexity] vision bytes from HTTP (${buf.byteLength} B)`);
+    return toDataUri(buf, mime);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Multimodal user content: text prompt + image (data URI preferred). */
+export function buildUserContent(
+  input: AnalysisInput,
+  imageSrc?: string | null,
+): string | PerplexityContentPart[] {
   const prompt = buildUserPrompt(input);
-  const publicImageUrl = input.imageUrl?.trim();
-  if (input.type === "image" && publicImageUrl) {
-    // Must be a publicly reachable HTTPS URL (e.g. https://…/api/uploads/tl_….jpg)
+  const src = imageSrc?.trim() || input.imageUrl?.trim();
+  if (input.type === "image" && src) {
     return [
       { type: "text", text: prompt },
-      { type: "image_url", image_url: { url: publicImageUrl } },
+      { type: "image_url", image_url: { url: src } },
     ];
   }
   return prompt;
@@ -419,20 +486,32 @@ export async function perplexityAnalyze(input: AnalysisInput): Promise<AnalysisR
     throw new Error("PERPLEXITY_API_KEY is not set");
   }
 
-  // Image path: public HTTPS URL only — Perplexity fetches the image from imageUrl.
+  // Image: always try to embed bytes. Remote URL-only is unreliable with Sonar.
+  let visionSrc: string | null = null;
   if (input.type === "image") {
     const url = input.imageUrl?.trim() || "";
-    if (!url || !/^https:\/\//i.test(url)) {
+    if (!url) {
       throw new Error(
-        "Screenshot analysis needs a public https imageUrl (upload via POST /api/uploads first).",
+        "Screenshot analysis needs imageUrl from POST /api/uploads (public host URL).",
       );
     }
-    console.info(`[perplexity] vision via public imageUrl=${url.slice(0, 160)}`);
+    try {
+      visionSrc = await resolveVisionDataUri(url);
+      console.info(
+        `[perplexity] sending embedded image to API (${Math.round(visionSrc.length / 1024)} KB data URI)`,
+      );
+    } catch (err) {
+      console.warn("[perplexity] embed failed, trying raw public URL (often ignored by model):", err);
+      visionSrc = /^https:\/\//i.test(url) ? url : null;
+    }
+    if (!visionSrc) {
+      throw new Error("Could not load screenshot bytes for Perplexity vision");
+    }
   }
 
-  const userContent = buildUserContent(input);
+  const userContent = buildUserContent(input, visionSrc);
   if (input.type === "image" && typeof userContent === "string") {
-    throw new Error("Vision request missing public imageUrl");
+    throw new Error("Vision request missing image payload");
   }
 
   const body = {
@@ -472,15 +551,11 @@ export async function perplexityAnalyze(input: AnalysisInput): Promise<AnalysisR
   const citations = Array.isArray(data.citations) ? data.citations.map(String) : [];
   const result = normalizeResult(parsed, input, citations);
 
-  // Soft-warn in logs if the model still ignored the image (do not 500 — URL path may still improve)
   if (
     input.type === "image" &&
     looksLikeBlindVisionResult(result.summary, result.source_assessment, result.context_analysis)
   ) {
-    console.warn(
-      "[perplexity] model may not have fetched imageUrl; response looks filename-only:",
-      input.imageUrl?.slice(0, 120),
-    );
+    console.warn("[perplexity] still looks blind after embed — model may lack vision for this model");
   }
 
   return result;
