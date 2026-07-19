@@ -118,6 +118,10 @@ function extractTextFromClaudeResponse(data: {
   return textParts;
 }
 
+function isFreemodelEndpoint(endpoint: string): boolean {
+  return /freemodel\.dev/i.test(endpoint);
+}
+
 async function callClaudeOnce(
   endpoint: string,
   apiKey: string,
@@ -136,31 +140,36 @@ async function callClaudeOnce(
     headers["x-claude-code-disable-nonessential-traffic"] = "1";
   }
 
+  // freemodel marks temperature unsupported for some opus ids — omit it there
+  const body: Record<string, unknown> = {
+    model,
+    max_tokens: 2048,
+    system: SYSTEM_PROMPT,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: mediaType,
+              data: base64,
+            },
+          },
+          { type: "text", text: prompt },
+        ],
+      },
+    ],
+  };
+  if (!isFreemodelEndpoint(endpoint)) {
+    body.temperature = 0.2;
+  }
+
   const res = await fetch(endpoint, {
     method: "POST",
     headers,
-    body: JSON.stringify({
-      model,
-      max_tokens: 2048,
-      temperature: 0.2,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: mediaType,
-                data: base64,
-              },
-            },
-            { type: "text", text: prompt },
-          ],
-        },
-      ],
-    }),
+    body: JSON.stringify(body),
   });
 
   const raw = await res.text();
@@ -175,6 +184,7 @@ async function callClaudeOnce(
     const msg =
       data?.error?.message ||
       data?.message ||
+      data?.error?.type ||
       raw.slice(0, 300) ||
       res.statusText;
     throw new Error(`Claude API ${res.status} model=${model}: ${msg}`);
@@ -184,6 +194,9 @@ async function callClaudeOnce(
   if (!text.trim()) throw new Error(`Empty Claude response model=${model}`);
   return { text, model };
 }
+
+const JSON_RETRY_SUFFIX =
+  "\n\nRespond with ONLY one JSON object matching the schema. No markdown, no prose outside the JSON.";
 
 /**
  * Analyze a mobile screenshot with Claude vision.
@@ -212,16 +225,54 @@ export async function claudeVisionAnalyze(input: AnalysisInput): Promise<Analysi
 
   for (const model of models) {
     try {
-      const { text, model: used } = await callClaudeOnce(
-        endpoint,
-        apiKey,
-        model,
-        mediaType,
-        base64,
-        prompt,
-      );
+      let text: string;
+      let used: string;
+      try {
+        ({ text, model: used } = await callClaudeOnce(
+          endpoint,
+          apiKey,
+          model,
+          mediaType,
+          base64,
+          prompt,
+        ));
+      } catch (callErr) {
+        lastErr = callErr instanceof Error ? callErr : new Error(String(callErr));
+        errors.push(`${model}: ${lastErr.message}`);
+        console.warn(`[claude-vision] model ${model} failed:`, lastErr.message);
+        if (!isModelNotFoundError(lastErr.message)) break;
+        continue;
+      }
+
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = extractJson(text) as Record<string, unknown>;
+      } catch (parseErr) {
+        // freemodel sometimes returns prose — one strict JSON retry
+        console.warn(
+          `[claude-vision] non-JSON from ${model}, retrying:`,
+          text.slice(0, 180).replace(/\s+/g, " "),
+        );
+        try {
+          ({ text, model: used } = await callClaudeOnce(
+            endpoint,
+            apiKey,
+            model,
+            mediaType,
+            base64,
+            prompt + JSON_RETRY_SUFFIX,
+          ));
+          parsed = extractJson(text) as Record<string, unknown>;
+        } catch (retryErr) {
+          lastErr = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
+          errors.push(`${model}: ${lastErr.message}`);
+          console.warn(`[claude-vision] JSON retry failed ${model}:`, lastErr.message);
+          // try next catalog model — bad instruction following ≠ hard failure
+          continue;
+        }
+      }
+
       console.info(`[claude-vision] success model=${used}`);
-      const parsed = extractJson(text) as Record<string, unknown>;
       const result = normalizeResult(parsed, input, []);
 
       if (
@@ -244,10 +295,7 @@ export async function claudeVisionAnalyze(input: AnalysisInput): Promise<Analysi
       lastErr = e instanceof Error ? e : new Error(String(e));
       errors.push(`${model}: ${lastErr.message}`);
       console.warn(`[claude-vision] model ${model} failed:`, lastErr.message);
-      // Auth / rate-limit / payload errors: do not burn through the whole list
-      if (!isModelNotFoundError(lastErr.message)) {
-        break;
-      }
+      if (!isModelNotFoundError(lastErr.message)) break;
     }
   }
 
