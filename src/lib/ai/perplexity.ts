@@ -2,11 +2,9 @@
  * Perplexity Sonar — web-grounded media literacy analysis.
  * Server-only: uses PERPLEXITY_API_KEY (never expose to the browser).
  *
- * Why Perplexity: built-in live web search + citations match TrustLens
- * "signals with evidence" better than a plain offline LLM.
+ * Screenshot flow: public imageUrl is sent to Perplexity; their API fetches the image.
+ * PERPLEXITY_API_KEY authenticates our call to Perplexity (required for any API use).
  */
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import {
   categoryFor,
   type AnalysisInput,
@@ -112,85 +110,21 @@ type PerplexityContentPart =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string } };
 
-const MAX_VISION_BYTES = 4 * 1024 * 1024; // 4MB after download
-
-function uploadsDir(): string {
-  // Keep in sync with src/lib/uploads/upload-handler.ts
-  return process.env.UPLOADS_DIR?.trim() || join(process.cwd(), "data", "uploads");
-}
-
-function mimeFromName(name: string): string {
-  const n = name.toLowerCase();
-  if (n.endsWith(".png")) return "image/png";
-  if (n.endsWith(".webp")) return "image/webp";
-  if (n.endsWith(".gif")) return "image/gif";
-  return "image/jpeg";
-}
-
-function toDataUri(buf: Buffer, mime: string): string {
-  if (buf.byteLength < 64) throw new Error("Vision image empty or too small");
-  if (buf.byteLength > MAX_VISION_BYTES) {
-    throw new Error(`Vision image too large (${buf.byteLength} bytes; max ${MAX_VISION_BYTES})`);
-  }
-  return `data:${mime};base64,${buf.toString("base64")}`;
-}
-
 /**
- * Load screenshot bytes for vision.
- * Prefer local disk for our own /api/uploads/* (Render cannot reliably self-HTTP).
- * Fall back to HTTP fetch for external signed URLs.
+ * Mobile screenshot pipeline (as designed):
+ *   phone uploads → server public HTTPS URL → Perplexity fetches that URL.
+ *
+ * We pass the public imageUrl in the multimodal message so Perplexity's
+ * servers GET the image themselves. No base64 embed required.
  */
-export async function resolveVisionDataUri(imageUrl: string): Promise<string> {
-  // 1) Local TrustLens upload: …/api/uploads/tl_<hex>.jpg
-  try {
-    const u = new URL(imageUrl);
-    const m = u.pathname.match(/\/api\/uploads\/(tl_[a-f0-9]+\.(jpe?g|png|webp|gif))$/i);
-    if (m) {
-      const full = join(uploadsDir(), m[1]);
-      const buf = await readFile(full);
-      console.info(`[perplexity] vision from disk ${m[1]} (${buf.byteLength} B)`);
-      return toDataUri(buf, mimeFromName(m[1]));
-    }
-  } catch (err) {
-    console.warn("[perplexity] local upload read failed:", err);
-  }
-
-  // 2) Remote fetch (signed Supabase URLs, etc.)
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 25_000);
-  try {
-    const res = await fetch(imageUrl, {
-      method: "GET",
-      headers: { Accept: "image/*,*/*" },
-      signal: ctrl.signal,
-    });
-    if (!res.ok) {
-      throw new Error(
-        `Could not fetch image for vision (${res.status}) from ${imageUrl.slice(0, 120)}`,
-      );
-    }
-    const buf = Buffer.from(await res.arrayBuffer());
-    const ct = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
-    const mime =
-      ct.startsWith("image/") && !ct.includes("svg") ? ct : mimeFromName(imageUrl);
-    console.info(`[perplexity] vision from HTTP (${buf.byteLength} B, ${mime})`);
-    return toDataUri(buf, mime);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/** User message content: multimodal parts when an image is available, else a plain string. */
-export function buildUserContent(
-  input: AnalysisInput,
-  imageDataUri?: string | null,
-): string | PerplexityContentPart[] {
+export function buildUserContent(input: AnalysisInput): string | PerplexityContentPart[] {
   const prompt = buildUserPrompt(input);
-  const visionSrc = imageDataUri?.trim() || input.imageUrl?.trim();
-  if (input.type === "image" && visionSrc) {
+  const publicImageUrl = input.imageUrl?.trim();
+  if (input.type === "image" && publicImageUrl) {
+    // Must be a publicly reachable HTTPS URL (e.g. https://…/api/uploads/tl_….jpg)
     return [
       { type: "text", text: prompt },
-      { type: "image_url", image_url: { url: visionSrc } },
+      { type: "image_url", image_url: { url: publicImageUrl } },
     ];
   }
   return prompt;
@@ -485,24 +419,20 @@ export async function perplexityAnalyze(input: AnalysisInput): Promise<AnalysisR
     throw new Error("PERPLEXITY_API_KEY is not set");
   }
 
-  // Prefer embedding pixels as data URI so vision does not depend on Perplexity
-  // successfully crawling our temporary /api/uploads URL.
-  let imageDataUri: string | null = null;
-  if (input.type === "image" && input.imageUrl?.trim()) {
-    try {
-      imageDataUri = await resolveVisionDataUri(input.imageUrl.trim());
-      console.info(
-        `[perplexity] vision data URI ready (${Math.round(imageDataUri.length / 1024)} KB string)`,
+  // Image path: public HTTPS URL only — Perplexity fetches the image from imageUrl.
+  if (input.type === "image") {
+    const url = input.imageUrl?.trim() || "";
+    if (!url || !/^https:\/\//i.test(url)) {
+      throw new Error(
+        "Screenshot analysis needs a public https imageUrl (upload via POST /api/uploads first).",
       );
-    } catch (err) {
-      console.warn("[perplexity] data-URI embed failed, falling back to imageUrl:", err);
-      imageDataUri = null;
     }
+    console.info(`[perplexity] vision via public imageUrl=${url.slice(0, 160)}`);
   }
 
-  const userContent = buildUserContent(input, imageDataUri);
+  const userContent = buildUserContent(input);
   if (input.type === "image" && typeof userContent === "string") {
-    throw new Error("Vision request missing image payload (no imageUrl/data URI)");
+    throw new Error("Vision request missing public imageUrl");
   }
 
   const body = {
@@ -542,13 +472,14 @@ export async function perplexityAnalyze(input: AnalysisInput): Promise<AnalysisR
   const citations = Array.isArray(data.citations) ? data.citations.map(String) : [];
   const result = normalizeResult(parsed, input, citations);
 
-  // Reject blind answers that only used the filename/label
+  // Soft-warn in logs if the model still ignored the image (do not 500 — URL path may still improve)
   if (
     input.type === "image" &&
     looksLikeBlindVisionResult(result.summary, result.source_assessment, result.context_analysis)
   ) {
-    throw new Error(
-      "Perplexity returned a blind (non-vision) analysis; refusing to surface filename-only result",
+    console.warn(
+      "[perplexity] model may not have fetched imageUrl; response looks filename-only:",
+      input.imageUrl?.slice(0, 120),
     );
   }
 
