@@ -3,11 +3,10 @@
  *
  * Mobile screenshot (imageUrl) vision priority:
  *   1) PERPLEXITY_API_KEY → Sonar vision
- *   2) ANTHROPIC_API_KEY / CLAUDE_API_KEY → Claude vision (screenshot-only path)
+ *   2) ANTHROPIC_API_KEY / CLAUDE_API_KEY → Claude vision (screenshot-only)
  *   3) OCR/text via free DeepSeek + cookies
  *
- * Text/url paths: free DeepSeek+cookies or Perplexity text API.
- * Public provider labels: perplexity | claude | mock.
+ * Every result includes engine_path = which path actually ran.
  */
 import { mockAnalyze } from "./mock-analyze";
 import { claudeVisionAnalyze, hasClaudeKey } from "./claude-vision";
@@ -19,15 +18,26 @@ import {
 import { hasPerplexityKey, perplexityAnalyze } from "./perplexity";
 import { hasPerplexityCookies, perplexityCookieAnalyze } from "./perplexity-cookie";
 import { sanitizeAnalysisProse, sanitizeDisplayList } from "./sanitize-text";
-import type { AnalysisInput, AnalysisResult } from "./types";
+import type {
+  AnalysisEnginePath,
+  AnalysisInput,
+  AnalysisResult,
+} from "./types";
 
 /** What the browser / API clients are allowed to see. */
 export type PublicProvider = "perplexity" | "mock" | "claude";
 
-function asPublicResult(result: AnalysisResult, provider: PublicProvider): AnalysisResult {
+function asPublicResult(
+  result: AnalysisResult,
+  provider: PublicProvider,
+  engine_path: AnalysisEnginePath,
+  engine_detail?: string,
+): AnalysisResult {
   return {
     ...result,
     provider,
+    engine_path,
+    engine_detail: engine_detail || result.engine_detail,
     summary: stripInternalNotes(sanitizeAnalysisProse(result.summary, "summary")),
     source_assessment: stripInternalNotes(
       sanitizeAnalysisProse(result.source_assessment, "source_assessment"),
@@ -57,11 +67,6 @@ function preferCookieSession(): boolean {
   return flag === "1" || flag === "true" || flag === "yes";
 }
 
-/**
- * Use free DeepSeek + Perplexity-cookie hybrid.
- * Default: ON when both free creds exist and PERPLEXITY_API_KEY is unset.
- * Force ON with ANALYZE_FREE_PIPELINE=1 even if a paid key exists.
- */
 function useFreeHybridPipeline(): boolean {
   if (!canUseFreeDeepSeekPerplexityPipeline()) return false;
   const flag = process.env.ANALYZE_FREE_PIPELINE?.trim().toLowerCase();
@@ -72,34 +77,48 @@ function useFreeHybridPipeline(): boolean {
 
 export async function analyzeContentServer(input: AnalysisInput): Promise<AnalysisResult> {
   const requiresVision = input.type === "image" && Boolean(input.imageUrl?.trim());
+  const visionErrors: string[] = [];
 
-  // 1) Mobile screenshot vision — Perplexity if key present
+  // 1) Perplexity vision
   if (requiresVision && hasPerplexityKey()) {
     try {
-      return asPublicResult(await perplexityAnalyze(input), "perplexity");
+      const r = await perplexityAnalyze(input);
+      return asPublicResult(r, "perplexity", "perplexity_vision");
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      visionErrors.push(`perplexity_vision: ${msg}`);
       console.error("[analyze] Perplexity vision path failed:", err);
-      // Prefer Claude for screenshots if available before OCR-only
       if (hasClaudeKey()) {
         try {
-          return asPublicResult(await claudeVisionAnalyze(input), "claude");
+          const r = await claudeVisionAnalyze(input);
+          return asPublicResult(
+            r,
+            "claude",
+            "claude_vision",
+            r.engine_detail || `after_perplexity_fail: ${msg.slice(0, 120)}`,
+          );
         } catch (claudeErr) {
+          const cmsg = claudeErr instanceof Error ? claudeErr.message : String(claudeErr);
+          visionErrors.push(`claude_vision: ${cmsg}`);
           console.error("[analyze] Claude vision fallback failed:", claudeErr);
         }
       }
     }
   }
 
-  // 1a) Claude vision — screenshot/imageUrl only (when no Perplexity key, or after it failed)
+  // 1a) Claude vision (freemodel or Anthropic) — screenshots only
   if (requiresVision && hasClaudeKey()) {
     try {
-      return asPublicResult(await claudeVisionAnalyze(input), "claude");
+      const r = await claudeVisionAnalyze(input);
+      return asPublicResult(r, "claude", "claude_vision", r.engine_detail);
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      visionErrors.push(`claude_vision: ${msg}`);
       console.error("[analyze] Claude vision path failed:", err);
     }
   }
 
-  // 1b) Screenshot without any vision key: OCR / caption text via free web path
+  // 1b) Screenshot OCR / caption text fallback
   if (requiresVision) {
     const ocr = input.text?.trim() || "";
     const textForAnalysis =
@@ -112,93 +131,111 @@ export async function analyzeContentServer(input: AnalysisInput): Promise<Analys
           `(label: ${input.imageName || "screenshot"}).`;
 
     const textInput: AnalysisInput = { type: "text", text: textForAnalysis };
-    const mark = (r: AnalysisResult): AnalysisResult => ({
-      ...r,
-      summary: `${r.summary} (Text from screen only — set ANTHROPIC_API_KEY or PERPLEXITY_API_KEY for image vision.)`,
-      confidence: Math.min(r.confidence, 75),
-    });
+    const failNote =
+      visionErrors.length > 0
+        ? ` Vision failed: ${visionErrors[visionErrors.length - 1].slice(0, 160)}`
+        : " No vision key or vision call failed.";
+    const mark = (r: AnalysisResult, path: AnalysisEnginePath): AnalysisResult =>
+      asPublicResult(
+        {
+          ...r,
+          summary: `${r.summary} (Text from screen only.${failNote})`,
+          confidence: Math.min(r.confidence, 75),
+        },
+        r.provider === "claude" ? "claude" : path.startsWith("screenshot_ocr") ? "perplexity" : "mock",
+        path,
+        visionErrors.join(" || ").slice(0, 400) || undefined,
+      );
 
     if (canUseFreeDeepSeekPerplexityPipeline() || useFreeHybridPipeline()) {
       try {
-        return asPublicResult(mark(await deepseekThenPerplexityCookie(textInput)), "perplexity");
+        return mark(await deepseekThenPerplexityCookie(textInput), "screenshot_ocr_free");
       } catch (err) {
         console.error("[analyze] Screenshot OCR free-pipeline failed:", err);
       }
     }
     if (hasPerplexityCookies()) {
       try {
-        return asPublicResult(mark(await perplexityCookieAnalyze(textInput)), "perplexity");
+        return mark(await perplexityCookieAnalyze(textInput), "screenshot_ocr_cookie");
       } catch (err) {
         console.error("[analyze] Screenshot OCR cookie path failed:", err);
       }
     }
     if (hasDeepSeekKey()) {
       try {
-        return asPublicResult(mark(await deepseekAnalyze(textInput)), "perplexity");
+        return mark(await deepseekAnalyze(textInput), "screenshot_ocr_deepseek");
       } catch (err) {
         console.error("[analyze] Screenshot OCR DeepSeek path failed:", err);
       }
     }
-    return asPublicResult(mark(await mockAnalyze(textInput)), "mock");
+    return mark(await mockAnalyze(textInput), "screenshot_ocr_mock");
   }
 
-  // 2) Hackathon free: DeepSeek API + Perplexity cookies (text/url — no pixel vision)
+  // 2–7 text/url paths
   if (useFreeHybridPipeline()) {
     try {
-      return asPublicResult(await deepseekThenPerplexityCookie(input), "perplexity");
+      return asPublicResult(
+        await deepseekThenPerplexityCookie(input),
+        "perplexity",
+        "text_free_hybrid",
+      );
     } catch (err) {
       console.error("[analyze] Free DeepSeek+web pipeline failed:", err);
     }
   }
 
-  // 3) Free hybrid as fallback for text/url
   if (canUseFreeDeepSeekPerplexityPipeline()) {
     try {
-      return asPublicResult(await deepseekThenPerplexityCookie(input), "perplexity");
+      return asPublicResult(
+        await deepseekThenPerplexityCookie(input),
+        "perplexity",
+        "text_free_hybrid",
+      );
     } catch (err) {
       console.error("[analyze] Free pipeline fallback failed:", err);
     }
   }
 
-  // 4) DeepSeek only (still free; no live web)
   if (hasDeepSeekKey()) {
     try {
-      return asPublicResult(await deepseekAnalyze(input), "perplexity");
+      return asPublicResult(await deepseekAnalyze(input), "perplexity", "text_deepseek");
     } catch (err) {
       console.error("[analyze] DeepSeek-only failed:", err);
     }
   }
 
-  // 5) Cookie-only Perplexity
-  const tryCookieFirst = preferCookieSession() && hasPerplexityCookies();
-  if (tryCookieFirst || hasPerplexityCookies()) {
+  if (preferCookieSession() && hasPerplexityCookies() || hasPerplexityCookies()) {
     try {
-      return asPublicResult(await perplexityCookieAnalyze(input), "perplexity");
+      return asPublicResult(
+        await perplexityCookieAnalyze(input),
+        "perplexity",
+        "text_cookie",
+      );
     } catch (err) {
       console.error("[analyze] Cookie session path failed:", err);
     }
   }
 
-  // 6) Official Perplexity API (text/url)
   if (hasPerplexityKey()) {
     try {
-      return asPublicResult(await perplexityAnalyze(input), "perplexity");
+      return asPublicResult(await perplexityAnalyze(input), "perplexity", "text_perplexity");
     } catch (err) {
       console.error("[analyze] Perplexity API path failed:", err);
     }
   }
 
-  // 7) Mock
-  return asPublicResult(await mockAnalyze(input), "mock");
+  return asPublicResult(await mockAnalyze(input), "mock", "mock");
 }
 
-/** Public health/status for /api/analyze */
+/** Config snapshot (what is available), not the path used for a request. */
 export function analyzeProviderInfo(): {
   provider: PublicProvider;
   engine: string;
   vision: boolean;
   screenshot_vision?: "perplexity" | "claude" | "none";
   free_pipeline?: boolean;
+  claude_base_url?: string;
+  claude_model?: string;
 } {
   const screenshotVision = hasPerplexityKey()
     ? "perplexity"
@@ -206,6 +243,15 @@ export function analyzeProviderInfo(): {
       ? "claude"
       : "none";
   const vision = screenshotVision !== "none";
+  const claudeBase =
+    process.env.ANTHROPIC_BASE_URL?.trim() ||
+    (/^(1|true|yes)$/i.test(process.env.ANTHROPIC_USE_FREEMODEL || "")
+      ? "https://cc.freemodel.dev"
+      : undefined);
+  const claudeModel =
+    process.env.CLAUDE_VISION_MODEL?.trim() ||
+    process.env.ANTHROPIC_MODEL?.trim() ||
+    (hasClaudeKey() ? "claude-opus-4-8" : undefined);
 
   if (canUseFreeDeepSeekPerplexityPipeline()) {
     return {
@@ -214,6 +260,8 @@ export function analyzeProviderInfo(): {
       vision,
       screenshot_vision: screenshotVision,
       free_pipeline: true,
+      claude_base_url: claudeBase,
+      claude_model: claudeModel,
     };
   }
   if (hasPerplexityKey() || hasClaudeKey() || hasPerplexityCookies() || hasDeepSeekKey()) {
@@ -229,6 +277,8 @@ export function analyzeProviderInfo(): {
       vision,
       screenshot_vision: screenshotVision,
       free_pipeline: false,
+      claude_base_url: claudeBase,
+      claude_model: claudeModel,
     };
   }
   return {

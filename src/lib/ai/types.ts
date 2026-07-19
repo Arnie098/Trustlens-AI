@@ -11,6 +11,20 @@ export interface AnalysisInput {
   imageUrl?: string;
 }
 
+/** Which code path produced this result (actual run, not just env config). */
+export type AnalysisEnginePath =
+  | "perplexity_vision"
+  | "claude_vision"
+  | "screenshot_ocr_free"
+  | "screenshot_ocr_cookie"
+  | "screenshot_ocr_deepseek"
+  | "screenshot_ocr_mock"
+  | "text_free_hybrid"
+  | "text_deepseek"
+  | "text_cookie"
+  | "text_perplexity"
+  | "mock";
+
 export interface AnalysisResult {
   trust_score: number;
   category: TrustCategory;
@@ -25,6 +39,10 @@ export interface AnalysisResult {
   replay_data: ReplayNode[];
   /** Public engine label only — never expose internal transport details */
   provider?: "perplexity" | "mock" | "claude";
+  /** Actual path used for THIS request */
+  engine_path?: AnalysisEnginePath;
+  /** Optional detail (model id, failure reason) for debugging */
+  engine_detail?: string;
   citations?: string[];
 }
 
