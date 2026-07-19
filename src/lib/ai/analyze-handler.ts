@@ -68,7 +68,9 @@ export async function handleAnalyzeApi(request: Request): Promise<Response> {
     if (/cookie|sse|session|PERPLEXITY_COOKIES|cloudflare|web session/i.test(message)) {
       safe = "Analysis is temporarily unavailable. Please try again.";
     } else if (/PERPLEXITY_API_KEY/i.test(message)) {
-      safe = "Screenshot vision is not configured on the server (missing API key).";
+      safe =
+        "Full image vision needs PERPLEXITY_API_KEY on the server. " +
+        "Without it, only on-screen text (OCR) can be analyzed.";
     } else if (/Vision image too large|too large/i.test(message)) {
       safe = "Screenshot is too large to analyze. Try again with a shorter capture.";
     } else if (/Could not fetch image|local upload read|data-URI|disk/i.test(message)) {
