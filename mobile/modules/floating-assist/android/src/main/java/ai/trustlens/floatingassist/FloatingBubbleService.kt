@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.Color
@@ -31,6 +32,20 @@ import android.widget.TextView
  * Idle: soft-docks to the edge (still mostly visible).
  */
 class FloatingBubbleService : Service() {
+  companion object {
+    private const val ACTION_RESTORE_BUBBLE =
+      "ai.trustlens.floatingassist.action.RESTORE_BUBBLE"
+
+    fun restoreBubble(context: Context) {
+      try {
+        context.startService(
+          Intent(context, FloatingBubbleService::class.java).setAction(ACTION_RESTORE_BUBBLE),
+        )
+      } catch (_: Exception) {
+      }
+    }
+  }
+
   private var windowManager: WindowManager? = null
   private var bubbleView: View? = null
   private var menuView: View? = null
@@ -40,6 +55,13 @@ class FloatingBubbleService : Service() {
   private var bubbleParams: WindowManager.LayoutParams? = null
 
   override fun onBind(intent: Intent?): IBinder? = null
+
+  override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    if (intent?.action == ACTION_RESTORE_BUBBLE) {
+      handler.post { setBubbleVisible(true) }
+    }
+    return START_STICKY
+  }
 
   override fun onCreate() {
     super.onCreate()
@@ -461,8 +483,7 @@ class FloatingBubbleService : Service() {
         putExtra(ScreenCaptureActivity.EXTRA_MODE, ScreenCaptureActivity.MODE_CAPTURE)
       }
       startActivity(intent)
-      // Restore bubble after a moment so it stays available for the next post
-      handler.postDelayed({ setBubbleVisible(true) }, 1800)
+      // The capture service restores the bubble only after the frame is saved.
     }, 80)
   }
 

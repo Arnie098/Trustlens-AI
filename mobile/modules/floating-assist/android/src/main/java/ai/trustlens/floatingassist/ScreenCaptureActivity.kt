@@ -109,6 +109,8 @@ class ScreenCaptureActivity : Activity() {
     // Hand off to FGS (mediaProjection type) — required before getMediaProjection on API 34+
     try {
       handedOff = true
+      // Remove the high-priority permission status before the captured frame.
+      CaptureNotifier.cancelProgress(applicationContext)
       MediaProjectionCaptureService.start(applicationContext, resultCode, data)
       leaveWithoutOpeningApp()
     } catch (e: Exception) {
@@ -140,6 +142,7 @@ class ScreenCaptureActivity : Activity() {
     // Floating error over current app — do NOT open TrustLens.
     FloatingResultOverlay.showError(applicationContext, message)
     CaptureNotifier.showError(applicationContext, message)
+    if (mode == MODE_CAPTURE) FloatingBubbleService.restoreBubble(applicationContext)
     leaveWithoutOpeningApp()
   }
 

@@ -68,16 +68,12 @@ class MediaProjectionCaptureService : Service() {
       return START_NOT_STICKY
     }
 
-    CaptureNotifier.showProgress(
-      this,
-      "Capturing screen…",
-      "You can stay in Facebook — result appears as a floating card.",
-    )
-    FloatingResultOverlay.showAnalyzing(this)
-
     Thread {
       try {
-        Thread.sleep(500)
+        // Let the permission activity and its heads-up notification disappear.
+        // No TrustLens overlay may be visible until after the frame is saved.
+        CaptureNotifier.cancelProgress(this)
+        Thread.sleep(700)
 
         val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         val projection: MediaProjection =
@@ -97,6 +93,7 @@ class MediaProjectionCaptureService : Service() {
         val path = ScreenCaptureHelper.captureFrame(applicationContext, projection)
         Log.i(TAG, "Capture OK: $path")
 
+        FloatingResultOverlay.showAnalyzing(this)
         CaptureNotifier.showProgress(
           this,
           "Analyzing…",
@@ -179,6 +176,7 @@ class MediaProjectionCaptureService : Service() {
         result.summary.take(100),
       )
       FloatingResultOverlay.showResult(this, result)
+      FloatingBubbleService.restoreBubble(this)
       // Optional: keep path for "Open app" deep analysis later
       CaptureResultStore.lastCapturePath = path
       stopSelfSafely()
@@ -190,6 +188,7 @@ class MediaProjectionCaptureService : Service() {
       CaptureNotifier.showError(this, message)
       CaptureNotifier.cancelProgress(this)
       FloatingResultOverlay.showError(this, message)
+      FloatingBubbleService.restoreBubble(this)
       stopSelfSafely()
     }
   }
@@ -198,6 +197,7 @@ class MediaProjectionCaptureService : Service() {
     CaptureNotifier.showError(this, message)
     CaptureNotifier.cancelProgress(this)
     FloatingResultOverlay.showError(this, message)
+    FloatingBubbleService.restoreBubble(this)
     stopSelfSafely()
   }
 
