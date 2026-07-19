@@ -40,13 +40,14 @@ data class QuickAnalyzeResult(
  */
 object AnalyzeClient {
   private const val TAG = "TLAnalyze"
-  private const val MAX_LONG_EDGE = 1600
-  private const val JPEG_QUALITY = 82
+  /** Keep text readable for vision + OCR of social posts */
+  private const val MAX_LONG_EDGE = 1920
+  private const val JPEG_QUALITY = 90
 
   fun analyzeScreenshot(ctx: Context, imagePath: String): QuickAnalyzeResult {
     val ocr = ScreenTextExtractor.extract(imagePath)
     val jpeg = compressForUpload(imagePath)
-    Log.i(TAG, "upload jpeg bytes=${jpeg.size}")
+    Log.i(TAG, "upload jpeg bytes=${jpeg.size} ocrChars=${ocr.length}")
 
     val publicUrl =
       try {
@@ -61,16 +62,29 @@ object AnalyzeClient {
       }
     Log.i(TAG, "public imageUrl=$publicUrl")
 
+    // Caption context for the model — not a substitute for the image.
+    val caption =
+      buildString {
+        append("Mobile screenshot of a social app screen (often Facebook). ")
+        append("Analyze the primary post/content visible in the image. ")
+        if (ocr.isNotBlank()) {
+          append("OCR (may include UI chrome):\n")
+          append(ocr.take(4000))
+        } else {
+          append("Little OCR text — rely on the image pixels (photo/meme/game/UI).")
+        }
+      }
+
     val body =
       JSONObject()
         .put("type", "image")
         .put("imageName", "trustlens-screen-capture.jpg")
         .put("imageUrl", publicUrl)
-    if (ocr.isNotBlank()) body.put("text", ocr.take(4500))
+        .put("text", caption)
 
     val result = postJson(ctx, "/api/analyze", body)
     return result.copy(
-      excerpt = ocr.take(160).ifBlank { "Visual screen content (OCR limited)" },
+      excerpt = ocr.take(160).ifBlank { "Visual screen content (rely on image)" },
     )
   }
 

@@ -11,12 +11,25 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * On-device OCR so floating analyze can judge the *visible* Facebook/post text
- * instead of a generic “someone took a screenshot” prompt.
+ * On-device OCR so floating analyze can attach readable caption context
+ * alongside the uploaded screenshot (vision still primary).
  */
 object ScreenTextExtractor {
   private const val TAG = "TLOcr"
   private const val TIMEOUT_MS = 12_000L
+
+  private val chromeLine =
+    Regex(
+      """(?ix)^(
+        facebook|messenger|home|watch|marketplace|notifications|menu|
+        like|comment|share|send|save|follow|following|friends|reels|
+        suggested\s+for\s+you|sponsored|see\s+translation|see\s+more|
+        write\s+a\s+comment|what.?s\s+on\s+your\s*mind|
+        just\s+now|\d+\s*(m|h|d|w|min|mins|hr|hrs|hour|hours|day|days)\s*ago|
+        \d+[.,]?\d*\s*[kmb]?\s*(likes?|comments?|shares?)|
+        trustlens|analyzing|quick\s+check
+      )$""",
+    )
 
   fun extract(imagePath: String): String {
     val file = File(imagePath)
@@ -71,17 +84,18 @@ object ScreenTextExtractor {
     return text
   }
 
-  /** Drop pure UI chrome noise; keep readable post body. */
+  /** Drop status-bar junk and common Facebook chrome; keep post body. */
   private fun cleanOcr(raw: String): String {
     return raw
       .lines()
       .map { it.trim() }
       .filter { line ->
         if (line.isEmpty()) return@filter false
-        // Drop ultra-short status-bar junk
         if (line.length <= 1) return@filter false
-        // Drop pure battery / time-ish lines when alone
-        if (line.matches(Regex("""^[\d:./%]+$"""))) return@filter false
+        if (line.matches(Regex("""^[\d:./%°·•]+$"""))) return@filter false
+        if (chromeLine.matches(line)) return@filter false
+        // Pure reaction / count rows
+        if (line.matches(Regex("""(?i)^[\d.,kmb\s]+(likes?|comments?|shares?)?$"""))) return@filter false
         true
       }
       .joinToString("\n")

@@ -71,8 +71,23 @@ function useFreeHybridPipeline(): boolean {
 }
 
 export async function analyzeContentServer(input: AnalysisInput): Promise<AnalysisResult> {
-  // 1) Hackathon free: DeepSeek API + Perplexity cookies (no spend)
-  if (useFreeHybridPipeline()) {
+  const requiresVision = input.type === "image" && Boolean(input.imageUrl?.trim());
+
+  // 1) Pixel vision FIRST when a fetchable imageUrl is present.
+  // Free DeepSeek/cookie paths cannot see the image — they must not run before this
+  // or mobile screenshot analysis becomes generic OCR/meta text.
+  if (requiresVision && hasPerplexityKey()) {
+    try {
+      return asPublicResult(await perplexityAnalyze(input), "perplexity");
+    } catch (err) {
+      console.error("[analyze] Perplexity vision path failed:", err);
+      // fall through only if vision truly fails
+    }
+  }
+
+  // 2) Hackathon free: DeepSeek API + Perplexity cookies (text/url — no pixel vision)
+  // Skip when caller expected vision (imageUrl set) so we don't pretend we saw the screen.
+  if (!requiresVision && useFreeHybridPipeline()) {
     try {
       return asPublicResult(await deepseekThenPerplexityCookie(input), "perplexity");
     } catch (err) {
@@ -80,23 +95,21 @@ export async function analyzeContentServer(input: AnalysisInput): Promise<Analys
     }
   }
 
-  const requiresVision = input.type === "image" && Boolean(input.imageUrl);
-
-  // 2) Paid vision / search via official Perplexity API
-  if (requiresVision && hasPerplexityKey()) {
-    try {
-      return asPublicResult(await perplexityAnalyze(input), "perplexity");
-    } catch (err) {
-      console.error("[analyze] Perplexity vision path failed:", err);
-    }
-  }
-
-  // 3) Free hybrid as fallback (e.g. paid vision failed, or free always available)
-  if (canUseFreeDeepSeekPerplexityPipeline()) {
+  // 3) Free hybrid as fallback for text/url only
+  if (!requiresVision && canUseFreeDeepSeekPerplexityPipeline()) {
     try {
       return asPublicResult(await deepseekThenPerplexityCookie(input), "perplexity");
     } catch (err) {
       console.error("[analyze] Free pipeline fallback failed:", err);
+    }
+  }
+
+  // 3b) Image without vision key: OCR/caption text path via free hybrid if available
+  if (requiresVision && !hasPerplexityKey() && canUseFreeDeepSeekPerplexityPipeline()) {
+    try {
+      return asPublicResult(await deepseekThenPerplexityCookie(input), "perplexity");
+    } catch (err) {
+      console.error("[analyze] Image OCR text path failed:", err);
     }
   }
 

@@ -74,9 +74,27 @@ export function buildUserPrompt(input: AnalysisInput): string {
   }
   // Image path: when we can send the actual image (imageUrl), instruct real visual inspection.
   if (input.imageUrl) {
+    const isScreen =
+      /screen|capture|trustlens-screen|facebook|social/i.test(input.imageName || "") ||
+      /screen|facebook|ocr/i.test(input.text || "");
     const caption = input.text?.trim()
-      ? `\nText extracted from the image (OCR — may contain errors):\n"""\n${input.text.slice(0, 4000)}\n"""`
+      ? `\nOn-device OCR of the same screenshot (may include UI chrome / errors — prefer the image):\n"""\n${input.text.slice(0, 4000)}\n"""`
       : "";
+    if (isScreen) {
+      return `${duty}
+
+This is a mobile screenshot of a social feed or app screen (often Facebook). Analyze ONLY what is visible in the attached image.
+
+Do this:
+1) Describe the primary post/content (who/what appears: account name if visible, caption, images, game UI, ad, news claim, meme, etc.).
+2) Extract every concrete factual claim (or state clearly if there is NO factual claim — e.g. personal photo, game, meme, pure entertainment).
+3) If it is NOT a news/claim post (cats, games, selfies, UI chrome): score higher (typically 70–92), say it is non-claim / entertainment, and keep concerns light (privacy, context only).
+4) If it IS a factual claim: search the web yourself for original source, fact-checks, and corroboration; put concrete findings in evidence.
+5) Ignore generic advice about "screenshots in general". Judge THIS screen's content.
+6) summary: 1–2 sentences naming what is on screen + your main trust signal.
+7) concerns: content-specific only (not "missing source" unless that applies to a real claim).
+${caption}`;
+    }
     return `${duty}\n\nInspect the attached image itself and analyze only the content visible in it. Identify its factual claims, visual framing, source/provenance signals, and possible editing or synthetic-media cues. Then search the web yourself for original material, official records, fact-checks, and independent coverage that support or contradict those claims.${caption}`;
   }
   return `${duty}\n\nAnalyze this image submission for media-literacy / authenticity signals. Filename or label: ${input.imageName || "uploaded image"}. Note limitations if you cannot see the binary image; use web knowledge about common AI-image and manipulation cues.`;

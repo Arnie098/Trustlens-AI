@@ -70,10 +70,11 @@ class MediaProjectionCaptureService : Service() {
 
     Thread {
       try {
-        // Let the permission activity and its heads-up notification disappear.
-        // No TrustLens overlay may be visible until after the frame is saved.
+        // Let the permission dialog, TrustLens UI, and notifications clear
+        // so the frame is the underlying app (Facebook), not our chrome.
         CaptureNotifier.cancelProgress(this)
-        Thread.sleep(700)
+        FloatingResultOverlay.dismiss()
+        Thread.sleep(1100)
 
         val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         val projection: MediaProjection =
