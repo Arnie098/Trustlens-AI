@@ -38,6 +38,12 @@ async function tryAppApis(request: Request): Promise<Response | null> {
     return handleOcrApi(request);
   }
 
+  // Temporary public screenshots for mobile floating assist → Perplexity vision
+  if (pathname === "/api/uploads" || pathname.startsWith("/api/uploads/")) {
+    const { handleUploadApi } = await import("./lib/uploads/upload-handler");
+    return handleUploadApi(request);
+  }
+
   // Local SQLite API only when not on Supabase
   if (!isSqliteProvider()) return null;
   if (pathname !== "/api/local" && !pathname.startsWith("/api/local/")) return null;

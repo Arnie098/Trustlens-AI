@@ -55,7 +55,7 @@ object FloatingResultOverlay {
         },
       )
       root.addView(
-        muted(app, "OCR → AI check. Stay here — result pops over Facebook."),
+        muted(app, "Upload → Perplexity vision. Stay here — card appears over Facebook."),
       )
       addPanel(app, wrapScroll(app, root))
     }

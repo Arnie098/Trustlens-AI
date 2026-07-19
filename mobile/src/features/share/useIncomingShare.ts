@@ -13,7 +13,7 @@ export function useIncomingShare(enabled = true) {
   useEffect(() => {
     if (!enabled) return;
 
-    function handleUrl(url: string | null) {
+    function handleUrl(url: string | null, opts?: { fromColdStart?: boolean }) {
       if (!url) return;
       const parsed = Linking.parse(url);
       const path = (parsed.path || "").replace(/^\//, "");
@@ -24,6 +24,16 @@ export function useIncomingShare(enabled = true) {
       if (path.startsWith("assist") || host === "assist") {
         const action = q.action ? String(q.action) : "menu";
         const capturePath = q.path ? String(q.path) : undefined;
+        // Cold-start getInitialURL often returns a stale capture deep link and
+        // immediately opens MediaProjection (looks like a stuck splash).
+        // Only auto-open bare capture from live URL events (bubble tap).
+        if (
+          opts?.fromColdStart &&
+          (action === "capture" || action === "screenshot") &&
+          !capturePath
+        ) {
+          return;
+        }
         router.push({
           pathname: "/(app)/assist",
           params: capturePath ? { action, path: capturePath } : { action },
@@ -51,7 +61,7 @@ export function useIncomingShare(enabled = true) {
       }
     }
 
-    void Linking.getInitialURL().then(handleUrl);
+    void Linking.getInitialURL().then((url) => handleUrl(url, { fromColdStart: true }));
     const sub = Linking.addEventListener("url", ({ url }) => handleUrl(url));
     return () => sub.remove();
   }, [enabled]);

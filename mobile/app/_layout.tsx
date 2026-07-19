@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { View, StyleSheet } from "react-native";
+import { useCallback, useEffect } from "react";
+import { View, StyleSheet, Text } from "react-native";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
@@ -27,8 +27,18 @@ export { ErrorBoundary } from "expo-router";
 
 const queryClient = new QueryClient();
 
-// Keep native splash until JS is ready (prevents blank frame); we hide immediately on mount.
+// Keep system splash until we explicitly hide it (then hide aggressively).
 void SplashScreen.preventAutoHideAsync().catch(() => {});
+
+function hideSplashNow(reason: string) {
+  void SplashScreen.hideAsync()
+    .then(() => {
+      if (__DEV__) console.log("[splash] hidden:", reason);
+    })
+    .catch((e) => {
+      if (__DEV__) console.warn("[splash] hide failed:", reason, e);
+    });
+}
 
 function ShareListener() {
   const { user } = useSession();
@@ -47,17 +57,16 @@ export default function RootLayout() {
     SpaceGrotesk_700Bold,
   });
 
+  const onRootLayout = useCallback(() => {
+    // First real layout is the most reliable moment on OEM skins (Tecno/Transsion).
+    hideSplashNow("root-layout");
+  }, []);
+
   useEffect(() => {
-    // Always dismiss native splash as soon as JS mounts
-    void SplashScreen.hideAsync().catch(() => {});
-    // Belt-and-suspenders: hide again shortly after (covers race with first paint)
-    const t = setTimeout(() => {
-      void SplashScreen.hideAsync().catch(() => {});
-    }, 50);
-    const t2 = setTimeout(() => {
-      void SplashScreen.hideAsync().catch(() => {});
-    }, 1500);
-    // Sync analyze API for native overlay (Facebook stay-in-app results)
+    hideSplashNow("mount");
+    const timers = [50, 200, 500, 1200, 2500, 5000].map((ms) =>
+      setTimeout(() => hideSplashNow(`timer-${ms}`), ms),
+    );
     try {
       const base = getApiBaseUrl();
       if (base && FloatingAssist.hasNativeModule()) {
@@ -69,10 +78,7 @@ export default function RootLayout() {
     } catch {
       /* ignore */
     }
-    return () => {
-      clearTimeout(t);
-      clearTimeout(t2);
-    };
+    return () => timers.forEach(clearTimeout);
   }, []);
 
   return (
@@ -81,7 +87,11 @@ export default function RootLayout() {
         <SessionProvider>
           <ShareListener />
           <StatusBar style="light" />
-          <View style={styles.root}>
+          <View style={styles.root} onLayout={onRootLayout}>
+            {/* Visible boot chrome — navy alone looks like a stuck system splash */}
+            <View style={styles.bootBadge} pointerEvents="none">
+              <Text style={styles.bootBadgeText}>TrustLensAI</Text>
+            </View>
             <Stack
               screenOptions={{
                 headerStyle: { backgroundColor: colors.background },
@@ -107,4 +117,18 @@ export default function RootLayout() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
+  bootBadge: {
+    position: "absolute",
+    top: 48,
+    alignSelf: "center",
+    zIndex: 0,
+    opacity: 0.35,
+  },
+  bootBadgeText: {
+    color: colors.teal,
+    fontSize: 12,
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    fontWeight: "600",
+  },
 });

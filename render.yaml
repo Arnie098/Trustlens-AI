@@ -33,3 +33,7 @@ services:
         value: "1"
       - key: PERPLEXITY_COOKIES
         sync: false
+      # Required for screenshot/image verification. Website-session cookies
+      # support text search only and cannot receive vision attachments.
+      - key: PERPLEXITY_API_KEY
+        sync: false

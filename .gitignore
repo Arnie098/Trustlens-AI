@@ -65,3 +65,6 @@ mobile/android/app/src/main/assets/capacitor.config.json
 mobile/android/local.properties
 mobile/*.apk
 mobile/*.aab
+
+data/uploads/
+

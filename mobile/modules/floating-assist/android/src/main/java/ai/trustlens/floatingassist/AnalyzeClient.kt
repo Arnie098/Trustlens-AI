@@ -1,16 +1,19 @@
 package ai.trustlens.floatingassist
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.util.Base64
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
-import java.io.File
 
 data class QuickAnalyzeResult(
   val trustScore: Int,
@@ -28,36 +31,136 @@ data class QuickAnalyzeResult(
 )
 
 /**
- * Native POST /api/analyze for floating overlay results over Facebook.
- * Prefer OCR of the real screen; never send a meta “screenshot advice” prompt.
+ * Floating-assist analyze:
+ *  1) OCR screen text (optional context)
+ *  2) Compress JPEG → POST /api/uploads → public HTTPS URL
+ *  3) POST /api/analyze { type:image, imageUrl, text? } so Perplexity can fetch the image
  */
 object AnalyzeClient {
   private const val TAG = "TLAnalyze"
+  private const val MAX_LONG_EDGE = 1600
+  private const val JPEG_QUALITY = 82
 
   fun analyzeScreenshot(ctx: Context, imagePath: String): QuickAnalyzeResult {
     val ocr = ScreenTextExtractor.extract(imagePath)
-    val imageBytes = File(imagePath).readBytes()
-    val imageDataUrl =
-      "data:image/jpeg;base64," + Base64.encodeToString(imageBytes, Base64.NO_WRAP)
+    val jpeg = compressForUpload(imagePath)
+    Log.i(TAG, "upload jpeg bytes=${jpeg.size}")
+
+    val publicUrl = uploadToServer(ctx, jpeg)
+    Log.i(TAG, "public imageUrl=$publicUrl")
+
     val body =
       JSONObject()
         .put("type", "image")
         .put("imageName", "trustlens-screen-capture.jpg")
-        .put("imageUrl", imageDataUrl)
+        .put("imageUrl", publicUrl)
     if (ocr.isNotBlank()) body.put("text", ocr.take(4500))
-    val result = post(ctx, body)
-    return result.copy(excerpt = ocr.take(160).ifBlank { "Limited readable text on screen" })
+
+    val result = postJson(ctx, "/api/analyze", body)
+    return result.copy(
+      excerpt = ocr.take(160).ifBlank { "Visual screen content (OCR limited)" },
+    )
   }
 
   fun analyzeText(ctx: Context, text: String): QuickAnalyzeResult {
     val trimmed = text.trim()
     val body = JSONObject().put("type", "text").put("text", trimmed.take(5500))
-    return post(ctx, body).copy(excerpt = trimmed.take(160))
+    return postJson(ctx, "/api/analyze", body).copy(excerpt = trimmed.take(160))
   }
 
-  private fun post(ctx: Context, body: JSONObject): QuickAnalyzeResult {
+  /**
+   * Resize long edge + re-encode so upload stays small (~LTE friendly).
+   */
+  private fun compressForUpload(imagePath: String): ByteArray {
+    val file = File(imagePath)
+    if (!file.exists()) throw IllegalStateException("Capture file missing.")
+
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(file.absolutePath, bounds)
+    val w = bounds.outWidth.coerceAtLeast(1)
+    val h = bounds.outHeight.coerceAtLeast(1)
+    val longEdge = maxOf(w, h)
+    var sample = 1
+    while (longEdge / sample > MAX_LONG_EDGE * 2) sample *= 2
+
+    val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+    var bitmap =
+      BitmapFactory.decodeFile(file.absolutePath, opts)
+        ?: throw IllegalStateException("Could not decode capture for upload.")
+
+    try {
+      val bw = bitmap.width
+      val bh = bitmap.height
+      val scale = MAX_LONG_EDGE.toFloat() / maxOf(bw, bh).toFloat()
+      if (scale < 0.99f) {
+        val nw = (bw * scale).toInt().coerceAtLeast(1)
+        val nh = (bh * scale).toInt().coerceAtLeast(1)
+        val scaled = Bitmap.createScaledBitmap(bitmap, nw, nh, true)
+        if (scaled !== bitmap) {
+          bitmap.recycle()
+          bitmap = scaled
+        }
+      }
+      val out = ByteArrayOutputStream()
+      if (!bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)) {
+        // Fallback: original file bytes
+        return file.readBytes()
+      }
+      return out.toByteArray()
+    } finally {
+      if (!bitmap.isRecycled) bitmap.recycle()
+    }
+  }
+
+  /**
+   * POST /api/uploads with base64 JSON → { data: { url } }
+   */
+  private fun uploadToServer(ctx: Context, jpeg: ByteArray): String {
     val base = TrustLensConfig.apiBase(ctx)
-    val url = URL("$base/api/analyze")
+    val b64 = Base64.encodeToString(jpeg, Base64.NO_WRAP)
+    val body =
+      JSONObject()
+        .put("imageBase64", b64)
+        .put("contentType", "image/jpeg")
+
+    val url = URL("$base/api/uploads")
+    val conn =
+      (url.openConnection() as HttpURLConnection).apply {
+        requestMethod = "POST"
+        connectTimeout = 30_000
+        readTimeout = 60_000
+        doOutput = true
+        setRequestProperty("Content-Type", "application/json; charset=utf-8")
+        setRequestProperty("Accept", "application/json")
+      }
+    try {
+      OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(body.toString()) }
+      val code = conn.responseCode
+      val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+      val raw =
+        BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { it.readText() }
+      if (code !in 200..299) {
+        throw IllegalStateException("Upload HTTP $code: ${raw.take(220)}")
+      }
+      val root = JSONObject(raw)
+      if (root.has("error") && !root.isNull("error")) {
+        val err = root.optJSONObject("error")
+        throw IllegalStateException(err?.optString("message") ?: "Upload failed")
+      }
+      val data = root.optJSONObject("data") ?: root
+      val publicUrl = data.optString("url", "").trim()
+      if (publicUrl.isEmpty()) {
+        throw IllegalStateException("Upload response missing url")
+      }
+      return publicUrl
+    } finally {
+      conn.disconnect()
+    }
+  }
+
+  private fun postJson(ctx: Context, path: String, body: JSONObject): QuickAnalyzeResult {
+    val base = TrustLensConfig.apiBase(ctx)
+    val url = URL("$base$path")
     val conn =
       (url.openConnection() as HttpURLConnection).apply {
         requestMethod = "POST"
@@ -85,6 +188,10 @@ object AnalyzeClient {
 
   private fun parse(raw: String): QuickAnalyzeResult {
     val root = JSONObject(raw)
+    if (root.has("error") && !root.isNull("error")) {
+      val err = root.optJSONObject("error")
+      throw IllegalStateException(err?.optString("message") ?: "Analyze failed")
+    }
     val data = root.optJSONObject("data") ?: root
     val score = data.optInt("trust_score", 50)
     val confRaw = data.optDouble("confidence", 0.0)

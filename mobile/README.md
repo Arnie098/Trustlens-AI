@@ -94,13 +94,17 @@ Create a user via **Create account** in the app, or in the Supabase Auth dashboa
 
 On **Expo Go / web**: demo bubble only; auto screen capture requires the native Android build. Photo pick is offered as a fallback.
 
+## Optional native OCR (on-device fallback)
+
+Implementation notes: **[`docs/ocr-implementation.md`](../docs/ocr-implementation.md)** (may lag behind OCR.space — see **OCR.space** section above and `../docs/mobile-features.md`).
+
 ```bash
 npx expo install @react-native-ml-kit/text-recognition
 npx expo prebuild
 npx expo run:android
 ```
 
-Without UNESCO OCR or ML Kit, Scan / screenshot still works with image analysis + manual caption.
+Without OCR.space, UNESCO OCR, or ML Kit, Scan / screenshot still works with image analysis + manual caption.
 
 ## Scripts
 

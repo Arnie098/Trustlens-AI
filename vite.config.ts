@@ -35,6 +35,26 @@ function localApiPlugin(): Plugin {
             return;
           }
 
+          if (urlPath === "/api/ocr" || urlPath.startsWith("/api/ocr/")) {
+            const request = await nodeToFetchRequest(req);
+            const { handleOcrApi } = (await server.ssrLoadModule(
+              "/src/lib/ocr/ocr-handler",
+            )) as typeof import("./src/lib/ocr/ocr-handler");
+            const response = await handleOcrApi(request);
+            await writeFetchResponse(res, response);
+            return;
+          }
+
+          if (urlPath === "/api/uploads" || urlPath.startsWith("/api/uploads/")) {
+            const request = await nodeToFetchRequest(req);
+            const { handleUploadApi } = (await server.ssrLoadModule(
+              "/src/lib/uploads/upload-handler",
+            )) as typeof import("./src/lib/uploads/upload-handler");
+            const response = await handleUploadApi(request);
+            await writeFetchResponse(res, response);
+            return;
+          }
+
           if (!urlPath.startsWith("/api/local")) {
             next();
             return;

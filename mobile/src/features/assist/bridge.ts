@@ -103,15 +103,13 @@ export const FloatingAssist = {
           };
         }
         await FloatingAssistNative.startBubble();
-        try {
-          await FloatingAssistNative.requestScreenCapturePermission();
-        } catch {
-          /* granted on first capture */
-        }
+        // Do NOT request MediaProjection here — that opens an invisible host activity
+        // and can look like a stuck splash on cold start. Permission is requested
+        // only when the user taps "Analyze content on my screen".
         return {
           ok: true,
           message:
-            "Bubble is on. On Facebook: tap TL → Analyze content on my screen. Results appear as a floating card — you stay in Facebook.",
+            "Bubble is on. On Facebook: tap TL → Analyze content on my screen (Android will ask to allow capture once). Results appear as a floating card.",
         };
       } catch (e) {
         return {

@@ -71,10 +71,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
     let mounted = true;
 
-    // Don't hang forever on splash/boot if SecureStore / network is slow.
+    // Don't hang forever on boot if SecureStore / network is slow (was 8s → felt like stuck splash).
     const bootTimeout = setTimeout(() => {
-      if (mounted) setLoading(false);
-    }, 8000);
+      if (mounted) {
+        console.warn("[session] getSession timed out — continuing without session");
+        setLoading(false);
+      }
+    }, 2500);
 
     db.auth
       .getSession()
