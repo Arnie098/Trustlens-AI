@@ -109,10 +109,49 @@ export async function analyzeContentServer(input: AnalysisInput): Promise<Analys
     }
   }
 
+  // 1b) Screenshot without paid vision key: analyze OCR / caption text via free web path.
+  // True pixel vision needs PERPLEXITY_API_KEY; cookie/DeepSeek paths cannot open images.
   if (requiresVision && !hasPerplexityKey()) {
-    throw new Error(
-      "Screenshot analysis requires PERPLEXITY_API_KEY (vision) on the server.",
-    );
+    const ocr = input.text?.trim() || "";
+    const textForAnalysis =
+      ocr.length >= 12
+        ? "Analyze this social media post text taken from a mobile screenshot " +
+          "(OCR may have small errors). Judge the post content itself:\n\n" +
+          ocr.slice(0, 5500)
+        : "A user captured a social media screenshot but little readable text was " +
+          "extracted. Assess typical trust risks for social posts with weak text " +
+          `(label: ${input.imageName || "screenshot"}).`;
+
+    const textInput: AnalysisInput = { type: "text", text: textForAnalysis };
+    const mark = (r: AnalysisResult): AnalysisResult => ({
+      ...r,
+      summary: `${r.summary} (Text from screen only — set PERPLEXITY_API_KEY for full image vision.)`,
+      confidence: Math.min(r.confidence, 75),
+    });
+
+    if (canUseFreeDeepSeekPerplexityPipeline() || useFreeHybridPipeline()) {
+      try {
+        return asPublicResult(mark(await deepseekThenPerplexityCookie(textInput)), "perplexity");
+      } catch (err) {
+        console.error("[analyze] Screenshot OCR free-pipeline failed:", err);
+      }
+    }
+    if (hasPerplexityCookies()) {
+      try {
+        return asPublicResult(mark(await perplexityCookieAnalyze(textInput)), "perplexity");
+      } catch (err) {
+        console.error("[analyze] Screenshot OCR cookie path failed:", err);
+      }
+    }
+    if (hasDeepSeekKey()) {
+      try {
+        return asPublicResult(mark(await deepseekAnalyze(textInput)), "perplexity");
+      } catch (err) {
+        console.error("[analyze] Screenshot OCR DeepSeek path failed:", err);
+      }
+    }
+    // Last resort mock rather than a hard 500
+    return asPublicResult(mark(await mockAnalyze(textInput)), "mock");
   }
 
   // 2) Hackathon free: DeepSeek API + Perplexity cookies (text/url — no pixel vision)
