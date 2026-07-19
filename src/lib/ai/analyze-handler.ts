@@ -63,13 +63,25 @@ export async function handleAnalyzeApi(request: Request): Promise<Response> {
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("[api/analyze]", message);
-    // Never leak internal transport / auth details to the browser
-    const safe =
-      /cookie|sse|session|PERPLEXITY_COOKIES|cloudflare|web session/i.test(message)
-        ? "Analysis is temporarily unavailable. Please try again."
-        : message.includes("Perplexity")
-          ? "Live analysis is temporarily unavailable. Please try again."
-          : "Analysis failed. Please try again.";
+    // Safe client messages — include actionable vision/upload hints without secrets
+    let safe = "Analysis failed. Please try again.";
+    if (/cookie|sse|session|PERPLEXITY_COOKIES|cloudflare|web session/i.test(message)) {
+      safe = "Analysis is temporarily unavailable. Please try again.";
+    } else if (/PERPLEXITY_API_KEY/i.test(message)) {
+      safe = "Screenshot vision is not configured on the server (missing API key).";
+    } else if (/Vision image too large|too large/i.test(message)) {
+      safe = "Screenshot is too large to analyze. Try again with a shorter capture.";
+    } else if (/Could not fetch image|local upload read|data-URI|disk/i.test(message)) {
+      safe = "Could not load the uploaded screenshot for vision. Try Analyze again.";
+    } else if (/blind \(non-vision\)|filename-only/i.test(message)) {
+      safe = "The AI could not read the image pixels. Try Analyze again in a moment.";
+    } else if (/Perplexity API \d+/i.test(message)) {
+      safe = "Live vision analysis is temporarily unavailable. Please try again.";
+    } else if (message.includes("Perplexity")) {
+      safe = "Live analysis is temporarily unavailable. Please try again.";
+    } else if (/valid JSON|Empty response/i.test(message)) {
+      safe = "The analysis service returned an incomplete result. Please try again.";
+    }
     return json({ error: { message: safe } }, 500);
   }
 }

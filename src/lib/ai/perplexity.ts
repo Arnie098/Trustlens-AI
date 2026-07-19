@@ -5,6 +5,8 @@
  * Why Perplexity: built-in live web search + citations match TrustLens
  * "signals with evidence" better than a plain offline LLM.
  */
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
   categoryFor,
   type AnalysisInput,
@@ -112,35 +114,70 @@ type PerplexityContentPart =
 
 const MAX_VISION_BYTES = 4 * 1024 * 1024; // 4MB after download
 
-/**
- * Fetch the hosted screenshot and embed as a data URI so Perplexity does not
- * need to crawl our /api/uploads URL (often fails → "no direct content analysis").
- */
-export async function resolveVisionDataUri(imageUrl: string): Promise<string> {
-  const res = await fetch(imageUrl, {
-    method: "GET",
-    headers: { Accept: "image/*,*/*" },
-    // Server-side fetch of our own public URL (or signed URL)
-    signal: AbortSignal.timeout(25_000),
-  });
-  if (!res.ok) {
-    throw new Error(`Could not fetch image for vision (${res.status}) from ${imageUrl.slice(0, 120)}`);
-  }
-  const buf = Buffer.from(await res.arrayBuffer());
+function uploadsDir(): string {
+  // Keep in sync with src/lib/uploads/upload-handler.ts
+  return process.env.UPLOADS_DIR?.trim() || join(process.cwd(), "data", "uploads");
+}
+
+function mimeFromName(name: string): string {
+  const n = name.toLowerCase();
+  if (n.endsWith(".png")) return "image/png";
+  if (n.endsWith(".webp")) return "image/webp";
+  if (n.endsWith(".gif")) return "image/gif";
+  return "image/jpeg";
+}
+
+function toDataUri(buf: Buffer, mime: string): string {
   if (buf.byteLength < 64) throw new Error("Vision image empty or too small");
   if (buf.byteLength > MAX_VISION_BYTES) {
     throw new Error(`Vision image too large (${buf.byteLength} bytes; max ${MAX_VISION_BYTES})`);
   }
-  const ct = (res.headers.get("content-type") || "image/jpeg").split(";")[0].trim().toLowerCase();
-  const mime =
-    ct.startsWith("image/") && !ct.includes("svg")
-      ? ct
-      : imageUrl.toLowerCase().endsWith(".png")
-        ? "image/png"
-        : imageUrl.toLowerCase().endsWith(".webp")
-          ? "image/webp"
-          : "image/jpeg";
   return `data:${mime};base64,${buf.toString("base64")}`;
+}
+
+/**
+ * Load screenshot bytes for vision.
+ * Prefer local disk for our own /api/uploads/* (Render cannot reliably self-HTTP).
+ * Fall back to HTTP fetch for external signed URLs.
+ */
+export async function resolveVisionDataUri(imageUrl: string): Promise<string> {
+  // 1) Local TrustLens upload: …/api/uploads/tl_<hex>.jpg
+  try {
+    const u = new URL(imageUrl);
+    const m = u.pathname.match(/\/api\/uploads\/(tl_[a-f0-9]+\.(jpe?g|png|webp|gif))$/i);
+    if (m) {
+      const full = join(uploadsDir(), m[1]);
+      const buf = await readFile(full);
+      console.info(`[perplexity] vision from disk ${m[1]} (${buf.byteLength} B)`);
+      return toDataUri(buf, mimeFromName(m[1]));
+    }
+  } catch (err) {
+    console.warn("[perplexity] local upload read failed:", err);
+  }
+
+  // 2) Remote fetch (signed Supabase URLs, etc.)
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 25_000);
+  try {
+    const res = await fetch(imageUrl, {
+      method: "GET",
+      headers: { Accept: "image/*,*/*" },
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      throw new Error(
+        `Could not fetch image for vision (${res.status}) from ${imageUrl.slice(0, 120)}`,
+      );
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    const ct = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+    const mime =
+      ct.startsWith("image/") && !ct.includes("svg") ? ct : mimeFromName(imageUrl);
+    console.info(`[perplexity] vision from HTTP (${buf.byteLength} B, ${mime})`);
+    return toDataUri(buf, mime);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** User message content: multimodal parts when an image is available, else a plain string. */
