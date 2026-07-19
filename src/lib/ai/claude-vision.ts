@@ -66,8 +66,8 @@ function claudeModel(): string {
   return (
     process.env.CLAUDE_VISION_MODEL?.trim() ||
     process.env.ANTHROPIC_MODEL?.trim() ||
-    // freemodel often maps short names; sonnet is a safe default
-    "claude-sonnet-4-20250514"
+    // freemodel / mobile screenshots — Claude Opus 4.8
+    "claude-opus-4.8"
   );
 }
 
