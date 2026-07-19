@@ -27,6 +27,9 @@ export { ErrorBoundary } from "expo-router";
 
 const queryClient = new QueryClient();
 
+// Keep native splash until JS is ready (prevents blank frame); we hide immediately on mount.
+void SplashScreen.preventAutoHideAsync().catch(() => {});
+
 function ShareListener() {
   const { user } = useSession();
   useIncomingShare(!!user);
@@ -47,10 +50,13 @@ export default function RootLayout() {
   useEffect(() => {
     // Always dismiss native splash as soon as JS mounts
     void SplashScreen.hideAsync().catch(() => {});
-    // Belt-and-suspenders: hide again shortly after
+    // Belt-and-suspenders: hide again shortly after (covers race with first paint)
     const t = setTimeout(() => {
       void SplashScreen.hideAsync().catch(() => {});
-    }, 100);
+    }, 50);
+    const t2 = setTimeout(() => {
+      void SplashScreen.hideAsync().catch(() => {});
+    }, 1500);
     // Sync analyze API for native overlay (Facebook stay-in-app results)
     try {
       const base = getApiBaseUrl();
@@ -63,7 +69,10 @@ export default function RootLayout() {
     } catch {
       /* ignore */
     }
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(t2);
+    };
   }, []);
 
   return (

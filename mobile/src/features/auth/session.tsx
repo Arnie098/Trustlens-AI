@@ -71,20 +71,38 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
     let mounted = true;
 
-    db.auth.getSession().then(({ data }: { data: { session: AppSession | null } }) => {
-      if (!mounted) return;
-      setSession(data.session);
-      setLoading(false);
-    });
+    // Don't hang forever on splash/boot if SecureStore / network is slow.
+    const bootTimeout = setTimeout(() => {
+      if (mounted) setLoading(false);
+    }, 8000);
+
+    db.auth
+      .getSession()
+      .then(({ data }: { data: { session: AppSession | null } }) => {
+        if (!mounted) return;
+        setSession(data.session);
+        setLoading(false);
+        clearTimeout(bootTimeout);
+      })
+      .catch((e: unknown) => {
+        console.warn("[session] getSession failed:", e);
+        if (mounted) {
+          setSession(null);
+          setLoading(false);
+          clearTimeout(bootTimeout);
+        }
+      });
 
     const { data: sub } = db.auth.onAuthStateChange(
       (_event: string, next: AppSession | null) => {
         setSession(next);
+        if (mounted) setLoading(false);
       },
     );
 
     return () => {
       mounted = false;
+      clearTimeout(bootTimeout);
       sub.subscription.unsubscribe();
     };
   }, []);

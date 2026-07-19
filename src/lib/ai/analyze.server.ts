@@ -50,6 +50,17 @@ function preferCookieSession(): boolean {
 }
 
 export async function analyzeContentServer(input: AnalysisInput): Promise<AnalysisResult> {
+  const requiresVision = input.type === "image" && Boolean(input.imageUrl);
+
+  // Cookie-session and mock fallbacks cannot inspect attached pixels. Never
+  // disguise a text/filename-only result as visual verification.
+  if (requiresVision) {
+    if (!hasPerplexityKey()) {
+      throw new Error("Perplexity vision analysis is not configured");
+    }
+    return asPublicResult(await perplexityAnalyze(input), "perplexity");
+  }
+
   // Shared staging (e.g. Render free preview): prefer website session cookies first.
   // Production should leave PERPLEXITY_PREFER_COOKIES unset and use PERPLEXITY_API_KEY.
   const tryCookieFirst = preferCookieSession() && hasPerplexityCookies();

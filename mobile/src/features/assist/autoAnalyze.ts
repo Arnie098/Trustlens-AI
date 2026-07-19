@@ -33,9 +33,7 @@ export type AssistStructuredResult = {
 async function loadResult(requestId: string, userId: string) {
   const { data } = await db
     .from("verification_results")
-    .select(
-      "trust_score, category, confidence, summary, concerns, evidence, next_steps",
-    )
+    .select("trust_score, category, confidence, summary, concerns, evidence, next_steps")
     .eq("request_id", requestId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -75,9 +73,7 @@ export async function analyzeClipboardText(
   const isUrl = /^https?:\/\//i.test(text);
   const requestId = await submitVerification(
     userId,
-    isUrl
-      ? { type: "url", input_url: text }
-      : { type: "text", input_text: text.slice(0, 5000) },
+    isUrl ? { type: "url", input_url: text } : { type: "text", input_text: text.slice(0, 5000) },
   );
 
   const row = await loadResult(requestId, userId);
@@ -124,45 +120,18 @@ export async function analyzeCapturedImage(
   try {
     prepared = await prepareImageForAnalysis(uri);
   } catch (e) {
-    throw new Error(
-      `Could not prepare image: ${e instanceof Error ? e.message : String(e)}`,
-    );
+    throw new Error(`Could not prepare image: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   const ocr = await recognizeTextFromImageUri(prepared);
   await ensureConsent(userId, true);
 
-  const imageName =
-    source === "capture" ? "trustlens-screen-capture.jpg" : "imported-image.jpg";
+  const imageName = source === "capture" ? "trustlens-screen-capture.jpg" : "imported-image.jpg";
 
-  // Fast path: enough text extracted → analyze as text (no storage upload)
-  if (ocr.text.trim().length >= 10) {
-    try {
-      const requestId = await submitVerification(userId, {
-        type: "text",
-        input_text: ocr.text.trim().slice(0, 5000),
-        imageName,
-      });
-      const row = await loadResult(requestId, userId);
-      return {
-        requestId,
-        trustScore: row?.trust_score ?? 0,
-        category: row?.category ?? "needs_verification",
-        confidence: row?.confidence ?? 0,
-        summary: row?.summary ?? "Analysis complete.",
-        concerns: row?.concerns ?? [],
-        evidence: row?.evidence ?? [],
-        nextSteps: row?.next_steps ?? [],
-        source,
-        preview: ocr.text.trim().slice(0, 120),
-      };
-    } catch (e) {
-      throw wrapNetworkError(e, "analyze API");
-    }
-  }
-
-  // Image path: upload bytes (not Blob) — Blob/fetch(file://) causes "Network request failed"
+  // Always send pixels for visual verification; OCR is additional context only.
+  // Upload bytes (not Blob) because fetch(file://) fails on React Native.
   let uploadedId: string | undefined;
+  let imageUrl: string | undefined;
   try {
     const { body, size } = await uriToJpegBytes(prepared);
     const path = `${userId}/${Date.now()}-${imageName.replace(/[^a-z0-9.\-_]/gi, "_")}`;
@@ -189,6 +158,13 @@ export async function analyzeCapturedImage(
       .single();
     if (upDbErr) throw new Error(upDbErr.message || "Failed to save upload record");
     uploadedId = uploaded?.id;
+    const { data: signed, error: signedErr } = await db.storage
+      .from("verification-uploads")
+      .createSignedUrl(path, 300);
+    if (signedErr || !signed?.signedUrl) {
+      throw new Error(signedErr?.message || "Could not create a temporary image URL");
+    }
+    imageUrl = signed.signedUrl;
   } catch (e) {
     throw wrapNetworkError(e, "image upload / Supabase storage");
   }
@@ -196,7 +172,9 @@ export async function analyzeCapturedImage(
   try {
     const requestId = await submitVerification(userId, {
       type: "image",
+      input_text: ocr.text.trim().slice(0, 5000) || undefined,
       imageName,
+      imageUrl,
       uploaded_content_id: uploadedId,
     });
     const row = await loadResult(requestId, userId);
@@ -210,7 +188,7 @@ export async function analyzeCapturedImage(
       evidence: row?.evidence ?? [],
       nextSteps: row?.next_steps ?? [],
       source,
-      preview: imageName,
+      preview: ocr.text.trim().slice(0, 120) || "Visual screen content",
     };
   } catch (e) {
     throw wrapNetworkError(e, "analyze API");

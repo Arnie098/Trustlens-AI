@@ -32,8 +32,7 @@ function loadCookies(): string | null {
   const fromEnv = process.env.PERPLEXITY_COOKIES?.trim();
   if (fromEnv) return fromEnv;
 
-  const file =
-    process.env.PERPLEXITY_COOKIES_FILE?.trim() || DEFAULT_COOKIE_FILE;
+  const file = process.env.PERPLEXITY_COOKIES_FILE?.trim() || DEFAULT_COOKIE_FILE;
   if (existsSync(file)) {
     const text = readFileSync(file, "utf8").trim();
     // Allow "Cookie: ..." prefix from copy-paste
@@ -52,10 +51,10 @@ function buildQuery(input: AnalysisInput): string {
         : `Image label: ${input.imageName || "uploaded image"}`;
 
   return `You are TrustLensAI (media literacy analyst with live web search — not a truth oracle).
-Search the open web YOURSELF for corroboration, contradictions, and source reputation. Put findings in evidence/source_assessment/context_analysis. Do NOT tell the user to look up articles, reports, or independent sources as a substitute for your search.
+Identify the factual claims, then search the open web YOURSELF for original sources, official statements, fact-checks, independent corroboration, contradictions, and source reputation. Put the concrete findings you obtained in evidence/source_assessment/context_analysis. Never tell the user to verify, search, Google, cross-check, consult other sources, find separate reports, or do their own research; those are your tasks. If nothing reliable is found, report that no reliable corroboration was found in your search.
 Reply with ONLY one JSON object (no markdown, no prose):
 
-{"trust_score":0-100,"category":"high_trust|needs_verification|low_confidence|potentially_misleading","confidence":0-100,"summary":"what claim is + what your search supports/weakens","source_assessment":"publisher credibility from your lookup","context_analysis":"framing / other coverage","ai_generated_detected":false,"concerns":["specific risks"],"evidence":["3-5 concrete findings with outlet/URL when available — not generic tips"],"next_steps":["2-4 habits to USE this analysis carefully — not 'go research elsewhere'"],"replay_data":[{"id":"origin","label":"...","platform":"Web","timestamp":"T+0h","reach":1,"warning":false,"connections":[]}]}
+{"trust_score":0-100,"category":"high_trust|needs_verification|low_confidence|potentially_misleading","confidence":0-100,"summary":"what claim is + what your search supports/weakens","source_assessment":"publisher credibility from your lookup","context_analysis":"framing / other coverage","ai_generated_detected":false,"concerns":["specific risks"],"evidence":["3-5 concrete findings with outlet/URL when available — not generic tips"],"next_steps":["1-3 actions based only on completed findings, never new research for the user"],"replay_data":[{"id":"origin","label":"...","platform":"Web","timestamp":"T+0h","reach":1,"warning":false,"connections":[]}]}
 
 Scoring: 80+ high_trust, 60-79 needs_verification, 40-59 low_confidence, <40 potentially_misleading. Hedged language.
 
@@ -291,7 +290,8 @@ export async function perplexityCookieAnalyze(input: AnalysisInput): Promise<Ana
   const lower = answer.toLowerCase();
   let trust_score = 55;
   if (/(miracle|conspiracy|clickbait|false|debunked|misleading)/.test(lower)) trust_score = 28;
-  else if (/(reputable|credible|reuters|associated press|peer-reviewed)/.test(lower)) trust_score = 78;
+  else if (/(reputable|credible|reuters|associated press|peer-reviewed)/.test(lower))
+    trust_score = 78;
   else if (/(unverified|caution|mixed|unclear)/.test(lower)) trust_score = 48;
 
   return normalizeResult(
@@ -307,10 +307,10 @@ export async function perplexityCookieAnalyze(input: AnalysisInput): Promise<Ana
               : "potentially_misleading",
       confidence: 55,
       // Never dump raw JSON into prose — normalizeResult/sanitize also unwrap
-      summary: sanitizeAnalysisProse(answer.slice(0, 2000), "summary").slice(0, 600) ||
+      summary:
+        sanitizeAnalysisProse(answer.slice(0, 2000), "summary").slice(0, 600) ||
         "Automated analysis completed. See evidence and concerns below.",
-      source_assessment:
-        "Source signals were reviewed with web-grounded analysis when available.",
+      source_assessment: "Source signals were reviewed with web-grounded analysis when available.",
       context_analysis:
         sanitizeAnalysisProse(answer.slice(0, 2000), "context_analysis").slice(0, 1200) ||
         "Context review was limited with the signals available for this run.",

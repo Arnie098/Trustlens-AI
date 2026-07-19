@@ -1,6 +1,7 @@
 package ai.trustlens.floatingassist
 
 import android.content.Context
+import android.util.Base64
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
@@ -9,6 +10,7 @@ import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.io.File
 
 data class QuickAnalyzeResult(
   val trustScore: Int,
@@ -34,67 +36,27 @@ object AnalyzeClient {
 
   fun analyzeScreenshot(ctx: Context, imagePath: String): QuickAnalyzeResult {
     val ocr = ScreenTextExtractor.extract(imagePath)
-    val prompt = buildMobilePrompt(ocr)
-    val result = postText(ctx, prompt)
+    val imageBytes = File(imagePath).readBytes()
+    val imageDataUrl =
+      "data:image/jpeg;base64," + Base64.encodeToString(imageBytes, Base64.NO_WRAP)
+    val body =
+      JSONObject()
+        .put("type", "image")
+        .put("imageName", "trustlens-screen-capture.jpg")
+        .put("imageUrl", imageDataUrl)
+    if (ocr.isNotBlank()) body.put("text", ocr.take(4500))
+    val result = post(ctx, body)
     return result.copy(excerpt = ocr.take(160).ifBlank { "Limited readable text on screen" })
   }
 
   fun analyzeText(ctx: Context, text: String): QuickAnalyzeResult {
     val trimmed = text.trim()
-    val prompt =
-      if (trimmed.length >= 8) {
-        buildMobilePrompt(trimmed, sourceLabel = "clipboard / shared text")
-      } else {
-        trimmed
-      }
-    return postText(ctx, prompt).copy(excerpt = trimmed.take(160))
+    val body = JSONObject().put("type", "text").put("text", trimmed.take(5500))
+    return post(ctx, body).copy(excerpt = trimmed.take(160))
   }
 
-  /**
-   * Tight, content-specific instructions so the model grades the *post*,
-   * not the fact that someone took a screenshot.
-   */
-  private fun buildMobilePrompt(
-    visibleText: String,
-    sourceLabel: String = "Facebook / social screenshot (on-device OCR)",
-  ): String {
-    val body =
-      if (visibleText.trim().length >= 12) {
-        visibleText.trim().take(4000)
-      } else {
-        """
-        (Little readable text extracted. Screen may be mostly images/video/UI.)
-        Treat this as a visual social post with weak textual claims.
-        """.trimIndent()
-      }
-
-    return """
-      [TrustLens mobile floating card — judge THIS content only]
-
-      Source: $sourceLabel
-
-      VISIBLE CONTENT:
-      \"\"\"
-      $body
-      \"\"\"
-
-      Rules:
-      1) Analyze the claims, framing, and provenance of THIS content — NOT the act of screenshotting.
-      2) If it is a game, meme, ad, personal update, or non-news UI with no factual claim, say so clearly; score higher (typically 70–90) and keep concerns light.
-      3) If it is a news/health/politics claim, grade sourcing, emotional framing, missing context, and verifiability.
-      4) summary: MAX 2 short sentences. Name what the content is about + the main trust signal. No boilerplate about "screenshots in general".
-      5) concerns: 0–3 SHORT, concrete bullets about THIS content (not generic advice).
-      6) evidence: 0–3 short supporting signals or web-check notes.
-      7) next_steps: exactly 2 practical checks a reader can do in ~30 seconds.
-      8) source_assessment + context_analysis: 1 short sentence each.
-      9) Use hedged language (signals, not verdicts). Never claim absolute truth.
-    """.trimIndent()
-  }
-
-  private fun postText(ctx: Context, text: String): QuickAnalyzeResult {
+  private fun post(ctx: Context, body: JSONObject): QuickAnalyzeResult {
     val base = TrustLensConfig.apiBase(ctx)
-    val body = JSONObject().put("type", "text").put("text", text.take(5500))
-
     val url = URL("$base/api/analyze")
     val conn =
       (url.openConnection() as HttpURLConnection).apply {

@@ -2,3 +2,4 @@
 -- was a live AI analysis or an offline heuristic fallback. Nullable for old rows.
 ALTER TABLE public.verification_results
   ADD COLUMN IF NOT EXISTS provider TEXT;
+2

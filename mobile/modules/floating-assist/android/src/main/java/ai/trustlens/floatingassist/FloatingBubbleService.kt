@@ -22,6 +22,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 /**
@@ -35,6 +36,7 @@ class FloatingBubbleService : Service() {
   private var menuView: View? = null
   private val handler = Handler(Looper.getMainLooper())
   private var halfHideRunnable: Runnable? = null
+  private var pulseRunnable: Runnable? = null
   private var bubbleParams: WindowManager.LayoutParams? = null
 
   override fun onBind(intent: Intent?): IBinder? = null
@@ -55,6 +57,7 @@ class FloatingBubbleService : Service() {
 
   override fun onDestroy() {
     halfHideRunnable?.let { handler.removeCallbacks(it) }
+    pulseRunnable?.let { handler.removeCallbacks(it) }
     removeViews()
     super.onDestroy()
   }
@@ -112,27 +115,66 @@ class FloatingBubbleService : Service() {
   private fun showBubble() {
     windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
     // Larger + bright teal so it is obvious on real phones
-    val size = dp(56)
-    val bubble = TextView(this).apply {
-      text = "TL"
-      setTextColor(Color.WHITE)
-      textSize = 15f
-      setTypeface(typeface, android.graphics.Typeface.BOLD)
-      gravity = Gravity.CENTER
+    val size = dp(58)
+
+    // Soft outer glow ring (sits behind the coin)
+    val glow = View(this).apply {
       background = GradientDrawable().apply {
         shape = GradientDrawable.OVAL
-        setColor(Color.parseColor("#2d8a9e"))
-        setStroke(dp(3), Color.parseColor("#5ed4c8"))
+        setColor(Color.parseColor("#332d8a9e"))
       }
-      elevation = dp(8).toFloat()
     }
+
+    // Gradient "coin" with the TrustLens logo mark
+    val coin = FrameLayout(this).apply {
+      background = GradientDrawable(
+        GradientDrawable.Orientation.TL_BR,
+        intArrayOf(Color.parseColor("#5ed4c8"), Color.parseColor("#2d8a9e"), Color.parseColor("#0c2340")),
+      ).apply {
+        shape = GradientDrawable.OVAL
+        setStroke(dp(2), Color.parseColor("#7fe9dd"))
+      }
+      elevation = dp(10).toFloat()
+    }
+    val mark = ImageView(this).apply {
+      setImageResource(R.drawable.trustlens_mark)
+      scaleType = ImageView.ScaleType.FIT_CENTER
+    }
+    val pad = dp(13)
+    coin.addView(mark, FrameLayout.LayoutParams(size, size).apply {
+      leftMargin = pad; topMargin = pad; rightMargin = pad; bottomMargin = pad
+      width = size - pad * 2; height = size - pad * 2
+    })
+
+    val bubble = coin
     val container = FrameLayout(this).apply {
       layoutParams = FrameLayout.LayoutParams(size, size)
+      addView(glow, FrameLayout.LayoutParams(size, size))
       addView(bubble, FrameLayout.LayoutParams(size, size))
       // Always start fully visible
       visibility = View.VISIBLE
       alpha = 1f
     }
+
+    // Breathing pulse: the glow gently expands/contracts to draw the eye
+    glow.animate().cancel()
+    val pulse = object : Runnable {
+      override fun run() {
+        glow.animate()
+          .scaleX(1.35f).scaleY(1.35f).alpha(0.15f)
+          .setDuration(1100)
+          .withEndAction {
+            glow.animate()
+              .scaleX(1f).scaleY(1f).alpha(0.6f)
+              .setDuration(1100)
+              .withEndAction { handler.postDelayed(this, 400) }
+              .start()
+          }
+          .start()
+      }
+    }
+    handler.postDelayed(pulse, 600)
+    pulseRunnable = pulse
 
     val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
       WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
