@@ -47,5 +47,8 @@ services:
         value: "https://cc.freemodel.dev"
       - key: CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
         value: "1"
+      # freemodel model id for mobile screenshot vision
       - key: CLAUDE_VISION_MODEL
-        sync: false
+        value: "claude-opus-4.8"
+      - key: ANTHROPIC_MODEL
+        value: "claude-opus-4.8"
