@@ -36,11 +36,16 @@ services:
       # Optional: official Perplexity for text + vision
       - key: PERPLEXITY_API_KEY
         sync: false
-      # Mobile screenshot vision (when no Perplexity key): Claude / Anthropic
+      # Mobile screenshot vision (Claude / freemodel Anthropic-compatible)
+      # Set ANTHROPIC_API_KEY in the dashboard (do not commit secrets).
       - key: ANTHROPIC_API_KEY
         sync: false
-      # Optional alias
       - key: CLAUDE_API_KEY
         sync: false
+      # freemodel.dev proxy — Perplexity-free vision for screenshots
+      - key: ANTHROPIC_BASE_URL
+        value: "https://cc.freemodel.dev"
+      - key: CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
+        value: "1"
       - key: CLAUDE_VISION_MODEL
         sync: false
