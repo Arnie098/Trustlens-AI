@@ -31,10 +31,12 @@ data class QuickAnalyzeResult(
 )
 
 /**
- * Floating-assist analyze:
- *  1) OCR screen text (optional context)
- *  2) Compress JPEG → POST /api/uploads → public HTTPS URL
- *  3) POST /api/analyze { type:image, imageUrl, text? } so Perplexity can fetch the image
+ * Floating-assist analyze — **server upload only** (no OCR-only fallback):
+ *  1) Optional OCR as caption context only
+ *  2) Compress JPEG → POST /api/uploads → public HTTPS URL (required)
+ *  3) POST /api/analyze { type:image, imageUrl, text? } for Perplexity vision
+ *
+ * If upload fails, the check fails. We never analyze without a hosted image URL.
  */
 object AnalyzeClient {
   private const val TAG = "TLAnalyze"
@@ -46,7 +48,17 @@ object AnalyzeClient {
     val jpeg = compressForUpload(imagePath)
     Log.i(TAG, "upload jpeg bytes=${jpeg.size}")
 
-    val publicUrl = uploadToServer(ctx, jpeg)
+    val publicUrl =
+      try {
+        uploadToServer(ctx, jpeg)
+      } catch (e: Exception) {
+        val msg = e.message ?: "Upload failed"
+        throw IllegalStateException(
+          "Server upload required (POST /api/uploads). " +
+            "Deploy the upload API on ${TrustLensConfig.apiBase(ctx)}. ($msg)",
+          e,
+        )
+      }
     Log.i(TAG, "public imageUrl=$publicUrl")
 
     val body =
