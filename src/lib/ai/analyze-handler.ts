@@ -67,11 +67,15 @@ export async function handleAnalyzeApi(request: Request): Promise<Response> {
     let safe = "Analysis failed. Please try again.";
     if (/cookie|sse|session|PERPLEXITY_COOKIES|cloudflare|web session/i.test(message)) {
       safe = "Analysis is temporarily unavailable. Please try again.";
+    } else if (/ANTHROPIC_API_KEY|CLAUDE_API_KEY is not set/i.test(message)) {
+      safe =
+        "Screenshot vision needs ANTHROPIC_API_KEY (Claude) or PERPLEXITY_API_KEY on the server.";
     } else if (/PERPLEXITY_API_KEY is not set/i.test(message)) {
       safe =
-        "Set PERPLEXITY_API_KEY on the server. That key calls Perplexity's API; " +
-        "the screenshot is still sent as a public image URL for Perplexity to open.";
-    } else if (/public https imageUrl|missing public imageUrl/i.test(message)) {
+        "Set PERPLEXITY_API_KEY or ANTHROPIC_API_KEY on the server for screenshot vision.";
+    } else if (/Claude API \d+/i.test(message)) {
+      safe = "Claude vision is temporarily unavailable. Please try again.";
+    } else if (/public https imageUrl|missing public imageUrl|imageUrl from POST/i.test(message)) {
       safe = "Screenshot upload did not return a public image URL. Try Analyze again.";
     } else if (/Vision image too large|too large/i.test(message)) {
       safe = "Screenshot is too large to analyze. Try again with a shorter capture.";

@@ -24,7 +24,7 @@ export interface AnalysisResult {
   next_steps: string[];
   replay_data: ReplayNode[];
   /** Public engine label only — never expose internal transport details */
-  provider?: "perplexity" | "mock";
+  provider?: "perplexity" | "mock" | "claude";
   citations?: string[];
 }
 

@@ -33,7 +33,14 @@ services:
         value: "1"
       - key: PERPLEXITY_COOKIES
         sync: false
-      # Required for screenshot/image verification. Website-session cookies
-      # support text search only and cannot receive vision attachments.
+      # Optional: official Perplexity for text + vision
       - key: PERPLEXITY_API_KEY
+        sync: false
+      # Mobile screenshot vision (when no Perplexity key): Claude / Anthropic
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Optional alias
+      - key: CLAUDE_API_KEY
+        sync: false
+      - key: CLAUDE_VISION_MODEL
         sync: false
