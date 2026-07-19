@@ -107,18 +107,69 @@ ${caption}`;
 }
 
 type PerplexityContentPart =
-  { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
 
-/** User message content: multimodal parts when an image URL is available, else a plain string. */
-export function buildUserContent(input: AnalysisInput): string | PerplexityContentPart[] {
+const MAX_VISION_BYTES = 4 * 1024 * 1024; // 4MB after download
+
+/**
+ * Fetch the hosted screenshot and embed as a data URI so Perplexity does not
+ * need to crawl our /api/uploads URL (often fails → "no direct content analysis").
+ */
+export async function resolveVisionDataUri(imageUrl: string): Promise<string> {
+  const res = await fetch(imageUrl, {
+    method: "GET",
+    headers: { Accept: "image/*,*/*" },
+    // Server-side fetch of our own public URL (or signed URL)
+    signal: AbortSignal.timeout(25_000),
+  });
+  if (!res.ok) {
+    throw new Error(`Could not fetch image for vision (${res.status}) from ${imageUrl.slice(0, 120)}`);
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.byteLength < 64) throw new Error("Vision image empty or too small");
+  if (buf.byteLength > MAX_VISION_BYTES) {
+    throw new Error(`Vision image too large (${buf.byteLength} bytes; max ${MAX_VISION_BYTES})`);
+  }
+  const ct = (res.headers.get("content-type") || "image/jpeg").split(";")[0].trim().toLowerCase();
+  const mime =
+    ct.startsWith("image/") && !ct.includes("svg")
+      ? ct
+      : imageUrl.toLowerCase().endsWith(".png")
+        ? "image/png"
+        : imageUrl.toLowerCase().endsWith(".webp")
+          ? "image/webp"
+          : "image/jpeg";
+  return `data:${mime};base64,${buf.toString("base64")}`;
+}
+
+/** User message content: multimodal parts when an image is available, else a plain string. */
+export function buildUserContent(
+  input: AnalysisInput,
+  imageDataUri?: string | null,
+): string | PerplexityContentPart[] {
   const prompt = buildUserPrompt(input);
-  if (input.type === "image" && input.imageUrl) {
+  const visionSrc = imageDataUri?.trim() || input.imageUrl?.trim();
+  if (input.type === "image" && visionSrc) {
     return [
       { type: "text", text: prompt },
-      { type: "image_url", image_url: { url: input.imageUrl } },
+      { type: "image_url", image_url: { url: visionSrc } },
     ];
   }
   return prompt;
+}
+
+/** Model admitted it never looked at the pixels. */
+export function looksLikeBlindVisionResult(summary: string, source: string, context: string): boolean {
+  const blob = `${summary}\n${source}\n${context}`.toLowerCase();
+  return (
+    /without examining the content directly/.test(blob) ||
+    /no direct content analysis/.test(blob) ||
+    /relies on the described image label/.test(blob) ||
+    /cannot (see|view|inspect|access) (the )?(image|screenshot|content)/.test(blob) ||
+    /unable to (see|view|inspect) (the )?(image|screenshot)/.test(blob) ||
+    /image label provided/.test(blob)
+  );
 }
 
 function defaultReplay(input: AnalysisInput, category: TrustCategory): ReplayNode[] {
@@ -397,13 +448,33 @@ export async function perplexityAnalyze(input: AnalysisInput): Promise<AnalysisR
     throw new Error("PERPLEXITY_API_KEY is not set");
   }
 
+  // Prefer embedding pixels as data URI so vision does not depend on Perplexity
+  // successfully crawling our temporary /api/uploads URL.
+  let imageDataUri: string | null = null;
+  if (input.type === "image" && input.imageUrl?.trim()) {
+    try {
+      imageDataUri = await resolveVisionDataUri(input.imageUrl.trim());
+      console.info(
+        `[perplexity] vision data URI ready (${Math.round(imageDataUri.length / 1024)} KB string)`,
+      );
+    } catch (err) {
+      console.warn("[perplexity] data-URI embed failed, falling back to imageUrl:", err);
+      imageDataUri = null;
+    }
+  }
+
+  const userContent = buildUserContent(input, imageDataUri);
+  if (input.type === "image" && typeof userContent === "string") {
+    throw new Error("Vision request missing image payload (no imageUrl/data URI)");
+  }
+
   const body = {
     model: modelName(),
     temperature: 0.2,
     max_tokens: 2048,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: buildUserContent(input) },
+      { role: "user", content: userContent },
     ],
   };
 
@@ -432,5 +503,17 @@ export async function perplexityAnalyze(input: AnalysisInput): Promise<AnalysisR
 
   const parsed = extractJson(content) as Record<string, unknown>;
   const citations = Array.isArray(data.citations) ? data.citations.map(String) : [];
-  return normalizeResult(parsed, input, citations);
+  const result = normalizeResult(parsed, input, citations);
+
+  // Reject blind answers that only used the filename/label
+  if (
+    input.type === "image" &&
+    looksLikeBlindVisionResult(result.summary, result.source_assessment, result.context_analysis)
+  ) {
+    throw new Error(
+      "Perplexity returned a blind (non-vision) analysis; refusing to surface filename-only result",
+    );
+  }
+
+  return result;
 }
