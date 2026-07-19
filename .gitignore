@@ -41,3 +41,5 @@ data/_last_analyze.json
 *.njsproj
 *.sln
 *.sw?
+
+data/uploads/
