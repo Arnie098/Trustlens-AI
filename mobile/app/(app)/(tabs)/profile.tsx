@@ -6,6 +6,8 @@ import { FloatingAssist } from "@/src/features/assist/bridge";
 import { Screen, Title, Muted, Card, Button, SectionLabel } from "@/src/components/ui";
 import { colors } from "@/src/theme/colors";
 import { getApiBaseUrl } from "@/src/lib/api/analyze";
+import { getOcrBaseUrl, getOcrSpaceApiKey, hasOcrSpaceDirectKey } from "@/src/lib/config";
+import { isOcrSpaceAvailable } from "@/src/lib/ocrspace";
 
 export default function ProfileScreen() {
   const { user, profile, signOut, backendLabel } = useSession();
@@ -122,6 +124,20 @@ export default function ProfileScreen() {
           <Text style={styles.h}>Configuration</Text>
           <Text style={styles.mono}>{backendLabel}</Text>
           <Text style={styles.mono}>Analyze API: {getApiBaseUrl() || "(not set)"}</Text>
+          <Text style={styles.mono}>
+            OCR.space:{" "}
+            {isOcrSpaceAvailable()
+              ? hasOcrSpaceDirectKey()
+                ? "direct key set (demo)"
+                : `via API ${getApiBaseUrl()}/api/ocr`
+              : "(not set — server OCR_SPACE_API_KEY + API base URL)"}
+          </Text>
+          <Text style={styles.mono}>
+            UNESCO OCR: {getOcrBaseUrl() || "(optional local Tesseract)"}
+          </Text>
+          {hasOcrSpaceDirectKey() && getOcrSpaceApiKey() ? (
+            <Text style={styles.mono}>OCR.space key: set in env (not shown)</Text>
+          ) : null}
           <Text style={styles.mono}>
             Native capture:{" "}
             {FloatingAssist.hasNativeModule()

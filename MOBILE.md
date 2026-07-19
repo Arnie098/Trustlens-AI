@@ -42,6 +42,9 @@ Copy `mobile/.env.example` → `mobile/.env`:
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 - `EXPO_PUBLIC_API_BASE_URL` (host that serves `POST /api/analyze`)
+- `EXPO_PUBLIC_API_BASE_URL` also powers OCR via `POST /api/ocr` (OCR.space key on **server**: `OCR_SPACE_API_KEY`)
+- Optional: `EXPO_PUBLIC_OCR_SPACE_API_KEY` (direct OCR.space — demo only)
+- Optional: `EXPO_PUBLIC_OCR_URL` (local UNESCO Tesseract)
 - `EXPO_PUBLIC_DB_PROVIDER=supabase`
 
 ## Screens (11)
@@ -50,4 +53,5 @@ Auth: login, register
 Tabs: home, verify, learn, badges, profile  
 Stack: verify result, course, quiz, floating assist
 
-See `mobile/README.md` for features and floating assist notes.
+See `mobile/README.md` for setup and floating assist notes.  
+**Full feature inventory (this branch):** [`docs/mobile-features.md`](docs/mobile-features.md)

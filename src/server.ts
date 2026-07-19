@@ -32,6 +32,12 @@ async function tryAppApis(request: Request): Promise<Response | null> {
     return handleAnalyzeApi(request);
   }
 
+  // OCR.space proxy (server holds OCR_SPACE_API_KEY)
+  if (pathname === "/api/ocr" || pathname.startsWith("/api/ocr/")) {
+    const { handleOcrApi } = await import("./lib/ocr/ocr-handler");
+    return handleOcrApi(request);
+  }
+
   // Local SQLite API only when not on Supabase
   if (!isSqliteProvider()) return null;
   if (pathname !== "/api/local" && !pathname.startsWith("/api/local/")) return null;
