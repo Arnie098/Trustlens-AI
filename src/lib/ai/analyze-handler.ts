@@ -87,6 +87,10 @@ export async function handleAnalyzeApi(request: Request): Promise<Response> {
       safe =
         "Set PERPLEXITY_API_KEY or ANTHROPIC_API_KEY on the server for screenshot vision.";
       fail_path = "perplexity_missing_key";
+    } else if (/Claude Code-only|official Claude Code client/i.test(message)) {
+      safe =
+        "Screenshot vision host is Claude Code-only. Set ANTHROPIC_BASE_URL=https://cc.freemodel.dev (server key) or official Anthropic.";
+      fail_path = "claude_code_only_endpoint";
     } else if (/Claude API \d+|Claude vision failed|Claude non-JSON/i.test(message)) {
       safe = "Claude vision is temporarily unavailable. Please try again.";
       fail_path = "claude_vision";

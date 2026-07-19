@@ -86,6 +86,13 @@ function isModelNotFoundError(message: string): boolean {
   );
 }
 
+/** Host/auth policy failures — do not burn the model list. */
+function isHardEndpointError(message: string): boolean {
+  return /Claude Code-only|Access Denied|official Claude Code|401|403|invalid.?x-api-key|authentication|Unauthorized|No valid credentials/i.test(
+    message,
+  );
+}
+
 function parseDataUri(dataUri: string): { mediaType: string; base64: string } {
   const m = dataUri.match(/^data:([^;]+);base64,(.+)$/s);
   if (!m) throw new Error("Invalid vision data URI");
@@ -192,6 +199,14 @@ async function callClaudeOnce(
 
   const text = extractTextFromClaudeResponse(data);
   if (!text.trim()) throw new Error(`Empty Claude response model=${model}`);
+  // freemodel api-cc host rejects non–Claude Code clients with 200 + prose
+  if (/Access Denied|official Claude Code client only|unauthorized client/i.test(text)) {
+    throw new Error(
+      `Claude Code-only endpoint rejected server call (model=${model}). ` +
+        `Set ANTHROPIC_BASE_URL=https://cc.freemodel.dev (not api-cc) and use a freemodel server API key, ` +
+        `or use official Anthropic api.anthropic.com + ANTHROPIC_API_KEY. Body: ${text.slice(0, 160)}`,
+    );
+  }
   return { text, model };
 }
 
@@ -240,6 +255,7 @@ export async function claudeVisionAnalyze(input: AnalysisInput): Promise<Analysi
         lastErr = callErr instanceof Error ? callErr : new Error(String(callErr));
         errors.push(`${model}: ${lastErr.message}`);
         console.warn(`[claude-vision] model ${model} failed:`, lastErr.message);
+        if (isHardEndpointError(lastErr.message)) break;
         if (!isModelNotFoundError(lastErr.message)) break;
         continue;
       }
