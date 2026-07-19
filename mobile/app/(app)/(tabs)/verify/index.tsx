@@ -5,10 +5,10 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  Alert,
   Switch,
   Image,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
@@ -18,7 +18,14 @@ import { ensureConsent, submitVerification } from "@/src/lib/verify/submit";
 import { prepareImageForAnalysis } from "@/src/lib/image-prep";
 import { uriToJpegBytes } from "@/src/lib/image-upload";
 import { normalizeUrl } from "@/src/lib/url";
-import { recognizeTextFromImageUri } from "@/src/lib/ocr";
+import {
+  isUnescoOcrConfigured,
+  recognizeTextFromImageUri,
+  type OcrEngine,
+  type OcrResult,
+} from "@/src/lib/ocr";
+import { getApiBaseUrl } from "@/src/lib/config";
+import { notify } from "@/src/lib/notify";
 import { db } from "@/src/lib/db";
 import { Button, Card, Input, Label, Muted, Screen, SectionLabel, Title } from "@/src/components/ui";
 import { colors } from "@/src/theme/colors";
@@ -37,7 +44,10 @@ export default function VerifyScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [imageName, setImageName] = useState("image.jpg");
   const [ocrHint, setOcrHint] = useState("");
-  const [ocrEngine, setOcrEngine] = useState<"native" | "none" | null>(null);
+  const [ocrEngine, setOcrEngine] = useState<OcrEngine | null>(null);
+  const [ocrMeta, setOcrMeta] = useState<Pick<OcrResult, "action" | "confidence" | "message"> | null>(
+    null,
+  );
 
   useEffect(() => {
     if (profile?.ai_consent) setConsent(true);
@@ -73,11 +83,11 @@ export default function VerifyScreen() {
 
   async function run(payload: Parameters<typeof submitVerification>[1]) {
     if (!user) {
-      Alert.alert("Sign in required");
+      notify("Sign in required");
       return;
     }
     if (!consent) {
-      Alert.alert("Consent required", "Enable AI-processing consent to continue.");
+      notify("Consent required", "Enable AI-processing consent to continue.");
       return;
     }
     setLoading(true);
@@ -87,48 +97,119 @@ export default function VerifyScreen() {
       const id = await submitVerification(user.id, payload);
       router.push(`/(app)/verify/${id}`);
     } catch (e) {
-      Alert.alert("Verification failed", e instanceof Error ? e.message : "Unknown error");
+      notify("Verification failed", e instanceof Error ? e.message : "Unknown error");
     } finally {
       setLoading(false);
     }
   }
 
   async function pickImage(fromCamera: boolean) {
-    const perm = fromCamera
-      ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert("Permission needed");
-      return;
-    }
-    const result = fromCamera
-      ? await ImagePicker.launchCameraAsync({ quality: 0.85 })
-      : await ImagePicker.launchImageLibraryAsync({ quality: 0.85, mediaTypes: ["images"] });
-    if (result.canceled || !result.assets?.[0]) return;
-    const asset = result.assets[0];
-    const prepared = await prepareImageForAnalysis(asset.uri);
-    setImageUri(prepared);
-    setImageName(asset.fileName || (fromCamera ? "scan.jpg" : "upload.jpg"));
-    setOcrLoading(true);
     try {
-      const ocr = await recognizeTextFromImageUri(prepared);
-      setOcrEngine(ocr.engine);
-      if (ocr.text) setOcrHint(ocr.text);
-      else if (ocr.engine === "none") {
-        setOcrHint("");
+      // Web: permissions often not required; still request on native
+      if (Platform.OS !== "web") {
+        const perm = fromCamera
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          notify(
+            "Permission needed",
+            fromCamera
+              ? "Allow camera access to scan posts."
+              : "Allow photo library access to import screenshots.",
+          );
+          return;
+        }
       }
-    } finally {
+
+      const result = fromCamera
+        ? await ImagePicker.launchCameraAsync({
+            quality: 0.85,
+            allowsEditing: false,
+            exif: false,
+          })
+        : await ImagePicker.launchImageLibraryAsync({
+            quality: 0.85,
+            allowsEditing: false,
+            mediaTypes: ["images"],
+            exif: false,
+          });
+
+      if (result.canceled) {
+        // User closed picker — not an error
+        return;
+      }
+      if (!result.assets?.[0]?.uri) {
+        notify("No image", "Could not read the selected image. Try another file.");
+        return;
+      }
+
+      const asset = result.assets[0];
+      // Show preview immediately so the UI never looks “stuck”
+      setImageUri(asset.uri);
+      setImageName(asset.fileName || (fromCamera ? "scan.jpg" : "upload.jpg"));
+      setOcrHint("");
+      setOcrMeta(null);
+      setOcrEngine(null);
+
+      const prepared = await prepareImageForAnalysis(asset.uri);
+      if (prepared && prepared !== asset.uri) {
+        setImageUri(prepared);
+      }
+
+      const imageForOcr = prepared || asset.uri;
+      setOcrLoading(true);
+      try {
+        const ocr = await recognizeTextFromImageUri(imageForOcr);
+        setOcrEngine(ocr.engine);
+        setOcrMeta({
+          action: ocr.action,
+          confidence: ocr.confidence,
+          message: ocr.message,
+        });
+        if (ocr.text) setOcrHint(ocr.text);
+        else setOcrHint("");
+
+        if (ocr.action === "retake" && !ocr.text) {
+          notify(
+            "Hard to read",
+            ocr.message ||
+              "We could not extract text. Retake with better lighting, or type the caption below.",
+          );
+        }
+      } catch (ocrErr) {
+        const msg = ocrErr instanceof Error ? ocrErr.message : String(ocrErr);
+        console.warn("[verify] OCR failed:", msg);
+        setOcrEngine("none");
+        setOcrMeta({
+          action: "retake",
+          message: `OCR failed: ${msg}. You can still type a caption and Run TrustLens.`,
+        });
+        notify(
+          "OCR failed",
+          `${msg}\n\nAPI: ${getApiBaseUrl() || "(not set)"}\nYou can still type the caption and continue.`,
+        );
+      } finally {
+        setOcrLoading(false);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[verify] pickImage failed:", msg);
+      notify("Could not open image", msg);
       setOcrLoading(false);
     }
   }
 
   async function uploadAndAnalyzeImage() {
-    if (!user || !imageUri) {
-      Alert.alert("Image required");
+    if (!user) {
+      notify("Sign in required");
+      return;
+    }
+    if (!imageUri) {
+      notify("Image required", "Tap Gallery or Camera first.");
       return;
     }
     if (!consent) {
-      Alert.alert("Consent required", "Enable AI-processing consent first.");
+      notify("Consent required", "Enable AI-processing consent first.");
       return;
     }
     setLoading(true);
@@ -198,7 +279,7 @@ export default function VerifyScreen() {
       });
       router.push(`/(app)/verify/${id}`);
     } catch (e) {
-      Alert.alert("Image verify failed", e instanceof Error ? e.message : "Unknown error");
+      notify("Image verify failed", e instanceof Error ? e.message : "Unknown error");
     } finally {
       setLoading(false);
     }
@@ -207,7 +288,7 @@ export default function VerifyScreen() {
   async function pasteClipboard() {
     const t = (await Clipboard.getStringAsync()).trim();
     if (!t) {
-      Alert.alert("Clipboard empty");
+      notify("Clipboard empty");
       return;
     }
     if (/^https?:\/\//i.test(t)) {
@@ -245,7 +326,7 @@ export default function VerifyScreen() {
                 onPress={() => {
                   const normalized = normalizeUrl(url);
                   if (!normalized) {
-                    Alert.alert("Invalid URL", "Enter a full link, e.g. https://example.com/post");
+                    notify("Invalid URL", "Enter a full link, e.g. https://example.com/post");
                     return;
                   }
                   setUrl(normalized);
@@ -264,7 +345,7 @@ export default function VerifyScreen() {
                 loading={loading}
                 onPress={() => {
                   if (text.trim().length < 10) {
-                    Alert.alert("Too short", "At least 10 characters.");
+                    notify("Too short", "At least 10 characters.");
                     return;
                   }
                   void run({ type: "text", input_text: text.trim() });
@@ -277,8 +358,12 @@ export default function VerifyScreen() {
             <View style={styles.form}>
               <Muted>
                 {tab === "scan"
-                  ? "Photograph a post. We try on-device OCR, then you review before analyzing."
-                  : "Import a screenshot or gallery image."}
+                  ? isUnescoOcrConfigured()
+                    ? "Photograph a post. OCR.space extracts text; review before analyzing."
+                    : "Photograph a post. Configure OCR.space (or type the caption)."
+                  : isUnescoOcrConfigured()
+                    ? "Import a screenshot — OCR will extract text for review."
+                    : "Import a screenshot or gallery image."}
               </Muted>
               <View style={styles.rowBtns}>
                 {tab === "scan" ? (
@@ -294,13 +379,27 @@ export default function VerifyScreen() {
               {ocrLoading ? (
                 <View style={styles.ocrRow}>
                   <ActivityIndicator color={colors.teal} />
-                  <Muted>Reading text…</Muted>
+                  <Muted>
+                    {isUnescoOcrConfigured() ? "Reading text (OCR.space)…" : "Reading text…"}
+                  </Muted>
                 </View>
               ) : null}
-              {ocrEngine === "none" ? (
-                <Muted>On-device OCR not installed in this build. Type or paste the caption below.</Muted>
-              ) : ocrEngine === "native" ? (
+              {!ocrLoading && ocrMeta?.message ? <Muted>{ocrMeta.message}</Muted> : null}
+              {!ocrLoading &&
+              (ocrEngine === "ocrspace" || ocrEngine === "unesco") &&
+              typeof ocrMeta?.confidence === "number" &&
+              ocrMeta.confidence >= 0 ? (
+                <Muted>
+                  Engine: {ocrEngine === "ocrspace" ? "OCR.space" : "UNESCO OCR"} · confidence{" "}
+                  {Math.round(ocrMeta.confidence)}%
+                  {ocrMeta.action ? ` · ${ocrMeta.action}` : ""}
+                </Muted>
+              ) : null}
+              {!ocrLoading && ocrEngine === "native" ? (
                 <Muted>Text extracted on-device — edit if needed.</Muted>
+              ) : null}
+              {!ocrLoading && ocrEngine === "none" && !ocrMeta?.message ? (
+                <Muted>No OCR engine available. Type or paste the caption below.</Muted>
               ) : null}
               <Label>Caption / OCR text</Label>
               <Input

@@ -27,6 +27,14 @@ data/*.db-*
 data/perplexity-cookies.txt
 data/_last_analyze.json
 
+# Local OCR / verification test helpers & dumps (do not commit)
+scripts/test-ocrspace.mjs
+scripts/test-ocrspace-server.mjs
+scripts/test-mobile-ocr-e2e.mjs
+scripts/check-recent-verifications.mjs
+scripts/reocr-recent-uploads.mjs
+data/ocr-debug/
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars

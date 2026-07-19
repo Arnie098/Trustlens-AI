@@ -24,6 +24,8 @@ import { useSession } from "@/lib/auth/session";
 import { ensureConsent, submitAndRedirect } from "@/lib/verify/submit";
 import { readClipboardText } from "@/lib/mobile/bridge";
 import { VerifyScanPanel } from "@/components/verify-scan-panel";
+import { analyzeContent } from "@/lib/ai/analyze";
+import { extractTextFromImage, type WebOcrResult } from "@/lib/ocr/client";
 
 const search = z.object({
   tab: z.enum(["url", "text", "image", "scan"]).optional(),
@@ -434,9 +436,23 @@ function ImageForm({ consent, setConsent, onConsented }: FormProps) {
   const { user } = useSession();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [ocrText, setOcrText] = useState("");
+  const [ocrMeta, setOcrMeta] = useState<WebOcrResult | null>(null);
   const [drag, setDrag] = useState(false);
   const [needConsent, setNeedConsent] = useState(false);
+
+  const clearFile = () => {
+    setFile(null);
+    setOcrText("");
+    setOcrMeta(null);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+  };
 
   const validate = (f: File) => {
     if (!IMAGE_TYPES.includes(f.type)) {
@@ -448,6 +464,45 @@ function ImageForm({ consent, setConsent, onConsented }: FormProps) {
       return false;
     }
     return true;
+  };
+
+  const applyFile = async (f: File) => {
+    if (!validate(f)) return;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setFile(f);
+    setPreviewUrl(URL.createObjectURL(f));
+    setOcrText("");
+    setOcrMeta(null);
+    setOcrLoading(true);
+    try {
+      const result = await extractTextFromImage(f);
+      setOcrMeta(result);
+      setOcrText(result.text);
+      if (result.text.trim().length >= 10) {
+        toast.success(
+          result.action === "accept"
+            ? "Text extracted via OCR — review and analyze."
+            : "Text extracted — please review the caption before analyzing.",
+        );
+      } else if (result.action === "retake") {
+        toast.message("Hard to read", {
+          description:
+            result.message ||
+            "No reliable text found. You can type a caption or analyze the image as-is.",
+        });
+      }
+    } catch (err) {
+      console.warn("[verify] OCR failed:", err);
+      setOcrMeta(null);
+      setOcrText("");
+      toast.error(
+        err instanceof Error
+          ? `OCR failed: ${err.message}. You can still type a caption or analyze the image.`
+          : "OCR failed. You can still type a caption or analyze the image.",
+      );
+    } finally {
+      setOcrLoading(false);
+    }
   };
 
   return (
@@ -495,11 +550,23 @@ function ImageForm({ consent, setConsent, onConsented }: FormProps) {
             toast.error(upDbErr.message || "Failed to save upload metadata");
             return;
           }
-          await submitAndRedirect(navigate, user.id, {
-            type: "image",
-            imageName: file.name,
-            uploaded_content_id: uploaded?.id,
-          });
+
+          // Prefer OCR / edited caption as text analysis (same as mobile)
+          const caption = ocrText.trim();
+          if (caption.length >= 10) {
+            await submitAndRedirect(navigate, user.id, {
+              type: "text",
+              input_text: caption.slice(0, 5000),
+              imageName: file.name,
+              uploaded_content_id: uploaded?.id,
+            });
+          } else {
+            await submitAndRedirect(navigate, user.id, {
+              type: "image",
+              imageName: file.name,
+              uploaded_content_id: uploaded?.id,
+            });
+          }
         } catch (err) {
           console.error(err);
           toast.error(err instanceof Error ? err.message : "Something went wrong");
@@ -518,7 +585,7 @@ function ImageForm({ consent, setConsent, onConsented }: FormProps) {
           e.preventDefault();
           setDrag(false);
           const f = e.dataTransfer.files?.[0];
-          if (f && validate(f)) setFile(f);
+          if (f) void applyFile(f);
         }}
         className={`grid cursor-lens place-items-center rounded-2xl border-2 border-dashed p-10 text-center transition-all ${
           drag
@@ -527,11 +594,19 @@ function ImageForm({ consent, setConsent, onConsented }: FormProps) {
         }`}
       >
         {file ? (
-          <div>
-            <ImageIcon className="mx-auto h-8 w-8 text-primary" />
+          <div className="w-full max-w-md">
+            {previewUrl ? (
+              <img
+                src={previewUrl}
+                alt="Selected for verification"
+                className="mx-auto max-h-48 rounded-xl border border-border object-contain"
+              />
+            ) : (
+              <ImageIcon className="mx-auto h-8 w-8 text-primary" />
+            )}
             <div className="mt-2 text-sm font-medium">{file.name}</div>
             <div className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</div>
-            <Button variant="link" size="sm" type="button" onClick={() => setFile(null)}>
+            <Button variant="link" size="sm" type="button" onClick={clearFile}>
               Choose a different file
             </Button>
           </div>
@@ -547,24 +622,68 @@ function ImageForm({ consent, setConsent, onConsented }: FormProps) {
                 className="sr-only"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
-                  if (f && validate(f)) setFile(f);
+                  if (f) void applyFile(f);
                 }}
               />
             </label>
-            <p className="mt-2 text-xs text-muted-foreground">JPG, PNG, WebP, GIF up to 8 MB</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              JPG, PNG, WebP, GIF up to 8 MB · OCR extracts text automatically
+            </p>
           </>
         )}
       </div>
+
+      {(ocrLoading || file) && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor="ocr-caption">Caption / OCR text</Label>
+            {ocrLoading ? (
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading text via OCR.space…
+              </span>
+            ) : ocrMeta ? (
+              <span className="text-xs text-muted-foreground">
+                {ocrMeta.engine}
+                {typeof ocrMeta.confidence === "number" && ocrMeta.confidence >= 0
+                  ? ` · ${Math.round(ocrMeta.confidence)}%`
+                  : ""}
+                {ocrMeta.action ? ` · ${ocrMeta.action}` : ""}
+              </span>
+            ) : null}
+          </div>
+          <Textarea
+            id="ocr-caption"
+            rows={5}
+            maxLength={5000}
+            placeholder={
+              ocrLoading
+                ? "Extracting text…"
+                : "Extracted or typed caption (used for analysis when ≥ 10 characters)"
+            }
+            value={ocrText}
+            onChange={(e) => setOcrText(e.target.value)}
+            disabled={loading || ocrLoading}
+          />
+          {ocrMeta?.message && !ocrLoading ? (
+            <p className="text-xs text-muted-foreground">{ocrMeta.message}</p>
+          ) : null}
+        </div>
+      )}
+
       <ConsentRow consent={consent} setConsent={setConsent} highlight={needConsent && !consent} />
       <Button
         type="submit"
         size="lg"
-        disabled={loading}
+        disabled={loading || ocrLoading}
         className="min-h-11 min-w-[12rem] rounded-full shadow-glow transition-transform hover:scale-[1.02]"
       >
         {loading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing…
+          </>
+        ) : ocrLoading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Reading text…
           </>
         ) : (
           "Analyze image"
