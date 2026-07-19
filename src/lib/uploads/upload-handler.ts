@@ -32,16 +32,26 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+/**
+ * Public origin for image URLs that Perplexity will fetch.
+ * Prefer PUBLIC_APP_URL / RENDER_EXTERNAL_URL so the link is always
+ * world-reachable HTTPS (not localhost / internal).
+ */
 function publicBase(request: Request): string {
   const env =
     process.env.PUBLIC_APP_URL?.trim() ||
     process.env.RENDER_EXTERNAL_URL?.trim() ||
     process.env.APP_URL?.trim() ||
     "";
-  if (env) return env.replace(/\/$/, "");
+  if (env) return env.replace(/\/$/, "").replace(/^http:\/\//i, "https://");
   // Fall back to the request origin (works on Render + local)
   try {
-    return new URL(request.url).origin;
+    const origin = new URL(request.url).origin;
+    // Perplexity needs a public host; keep https when possible
+    if (origin.includes("onrender.com") && origin.startsWith("http://")) {
+      return origin.replace("http://", "https://");
+    }
+    return origin;
   } catch {
     return "http://localhost:3000";
   }
