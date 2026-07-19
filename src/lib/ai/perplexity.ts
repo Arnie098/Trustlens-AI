@@ -274,7 +274,9 @@ export function extractJson(text: string): unknown {
   if (start >= 0 && end > start) {
     return JSON.parse(trimmed.slice(start, end + 1));
   }
-  throw new Error("Perplexity response was not valid JSON");
+  throw new Error(
+    `Model response was not valid JSON: ${trimmed.slice(0, 160).replace(/\s+/g, " ")}`,
+  );
 }
 
 function asStringArray(v: unknown, fallback: string[] = []): string[] {
