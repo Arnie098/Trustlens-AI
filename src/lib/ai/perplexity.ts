@@ -75,27 +75,33 @@ export function buildUserPrompt(input: AnalysisInput): string {
   // Image path: when we can send the actual image (imageUrl), instruct real visual inspection.
   if (input.imageUrl) {
     const isScreen =
-      /screen|capture|trustlens-screen|facebook|social/i.test(input.imageName || "") ||
-      /screen|facebook|ocr/i.test(input.text || "");
+      /screen|capture|social-feed|facebook|social/i.test(input.imageName || "") ||
+      /mobile_social_screenshot|social app|facebook|HELPER_OCR/i.test(input.text || "");
     const caption = input.text?.trim()
-      ? `\nOn-device OCR of the same screenshot (may include UI chrome / errors — prefer the image):\n"""\n${input.text.slice(0, 4000)}\n"""`
+      ? `\nClient helper notes (may be wrong — the attached IMAGE is ground truth):\n"""\n${input.text.slice(0, 4000)}\n"""`
       : "";
     if (isScreen) {
       return `${duty}
 
-This is a mobile screenshot of a social feed or app screen (often Facebook). Analyze ONLY what is visible in the attached image.
+You are given a PHOTOGRAPH of a phone screen showing a social feed (often Facebook).
+
+CRITICAL RULES:
+- Analyze the MAIN POST in the feed (person/page name, caption, photos, article preview, claim, ad, meme, game, etc.).
+- Do NOT analyze TrustLens, any floating verification card, "quick check", analyzer branding, or media-literacy product marketing — even if those words appear in helper notes or the filename.
+- Do NOT invent that the content is about a URL-safety tool unless that is clearly the post itself.
+- Ignore status bar text (clock, battery, signal), "15+", reaction counts, and bottom navigation when they are only chrome.
+- Prefer the attached image pixels over OCR helper text (OCR often misreads the clock/status bar).
 
 Do this:
-1) Describe the primary post/content (who/what appears: account name if visible, caption, images, game UI, ad, news claim, meme, etc.).
-2) Extract every concrete factual claim (or state clearly if there is NO factual claim — e.g. personal photo, game, meme, pure entertainment).
-3) If it is NOT a news/claim post (cats, games, selfies, UI chrome): score higher (typically 70–92), say it is non-claim / entertainment, and keep concerns light (privacy, context only).
-4) If it IS a factual claim: search the web yourself for original source, fact-checks, and corroboration; put concrete findings in evidence.
-5) Ignore generic advice about "screenshots in general". Judge THIS screen's content.
-6) summary: 1–2 sentences naming what is on screen + your main trust signal.
-7) concerns: content-specific only (not "missing source" unless that applies to a real claim).
+1) summary: Name what the post actually shows (e.g. "A Facebook post by X about Y with photo of Z") + one trust signal. Max 2 sentences.
+2) Extract concrete factual claims from the post, or state clearly it is non-claim content (personal photo, entertainment, event promo without hard facts).
+3) Non-claim / entertainment / pure personal photo: score typically 70–92; light concerns only.
+4) Hard factual claims: search the web yourself; put concrete findings in evidence (not generic tips).
+5) source_assessment / context_analysis: about the POST author/outlet, not about TrustLens.
+6) concerns: about THIS post only.
 ${caption}`;
     }
-    return `${duty}\n\nInspect the attached image itself and analyze only the content visible in it. Identify its factual claims, visual framing, source/provenance signals, and possible editing or synthetic-media cues. Then search the web yourself for original material, official records, fact-checks, and independent coverage that support or contradict those claims.${caption}`;
+    return `${duty}\n\nInspect the attached image itself and analyze only the content visible in it. Identify its factual claims, visual framing, source/provenance signals, and possible editing or synthetic-media cues. Then search the web yourself for original material, official records, fact-checks, and independent coverage that support or contradict those claims. Do not analyze the TrustLens product unless it is the subject of the image.${caption}`;
   }
   return `${duty}\n\nAnalyze this image submission for media-literacy / authenticity signals. Filename or label: ${input.imageName || "uploaded image"}. Note limitations if you cannot see the binary image; use web knowledge about common AI-image and manipulation cues.`;
 }

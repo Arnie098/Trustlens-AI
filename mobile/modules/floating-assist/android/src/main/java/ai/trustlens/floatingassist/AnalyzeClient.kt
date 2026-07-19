@@ -62,30 +62,34 @@ object AnalyzeClient {
       }
     Log.i(TAG, "public imageUrl=$publicUrl")
 
-    // Caption context for the model — not a substitute for the image.
+    // Neutral caption — do NOT mention TrustLens/product names (biases web search).
     val caption =
       buildString {
-        append("Mobile screenshot of a social app screen (often Facebook). ")
-        append("Analyze the primary post/content visible in the image. ")
+        appendLine("TYPE: mobile_social_screenshot")
+        appendLine("TASK: Analyze ONLY the main social feed post visible in the attached image.")
+        appendLine("Ignore status bar, clocks, battery, notification badges, and bottom nav.")
+        appendLine("Do NOT describe or evaluate any analyzer app, floating card, or brand overlay.")
         if (ocr.isNotBlank()) {
-          append("OCR (may include UI chrome):\n")
-          append(ocr.take(4000))
+          appendLine("HELPER_OCR (secondary; image is ground truth):")
+          append(ocr.take(3500))
         } else {
-          append("Little OCR text — rely on the image pixels (photo/meme/game/UI).")
+          append("HELPER_OCR: none useful — use image pixels only.")
         }
       }
 
     val body =
       JSONObject()
         .put("type", "image")
-        .put("imageName", "trustlens-screen-capture.jpg")
+        // Neutral name — "trustlens-*" makes the model talk about TrustLens instead of the post
+        .put("imageName", "social-feed-screenshot.jpg")
         .put("imageUrl", publicUrl)
         .put("text", caption)
 
     val result = postJson(ctx, "/api/analyze", body)
-    return result.copy(
-      excerpt = ocr.take(160).ifBlank { "Visual screen content (rely on image)" },
-    )
+    val excerpt =
+      if (ocr.isNotBlank()) ocr.take(160)
+      else "Using full image (OCR was status-bar/UI only)"
+    return result.copy(excerpt = excerpt)
   }
 
   fun analyzeText(ctx: Context, text: String): QuickAnalyzeResult {
@@ -166,9 +170,9 @@ object AnalyzeClient {
       val raw =
         BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { it.readText() }
       if (code !in 200..299) {
-        throw IllegalStateException("Upload HTTP $code: ${raw.take(220)}")
+        throw IllegalStateException("Upload HTTP $code: ${summarizeBody(raw)}")
       }
-      val root = JSONObject(raw)
+      val root = parseJsonObject(raw, "upload")
       if (root.has("error") && !root.isNull("error")) {
         val err = root.optJSONObject("error")
         throw IllegalStateException(err?.optString("message") ?: "Upload failed")
@@ -176,7 +180,7 @@ object AnalyzeClient {
       val data = root.optJSONObject("data") ?: root
       val publicUrl = data.optString("url", "").trim()
       if (publicUrl.isEmpty()) {
-        throw IllegalStateException("Upload response missing url")
+        throw IllegalStateException("Upload response missing url: ${summarizeBody(raw)}")
       }
       return publicUrl
     } finally {
@@ -204,7 +208,7 @@ object AnalyzeClient {
       val raw =
         BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { it.readText() }
       if (code !in 200..299) {
-        throw IllegalStateException("Analyze API HTTP $code: ${raw.take(200)}")
+        throw IllegalStateException("Analyze API HTTP $code: ${summarizeBody(raw)}")
       }
       return parse(raw)
     } finally {
@@ -212,8 +216,35 @@ object AnalyzeClient {
     }
   }
 
+  /** Avoid cryptic "Value <!DOCTYPE of type String cannot be converted to JSONObject". */
+  private fun parseJsonObject(raw: String, where: String): JSONObject {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) {
+      throw IllegalStateException("Unexpected empty response from $where")
+    }
+    if (trimmed.startsWith("<") || trimmed.startsWith("<!")) {
+      throw IllegalStateException(
+        "Unexpected HTML response from $where (expected JSON). " +
+          "Server may be cold, wrong URL, or route missing. ${summarizeBody(trimmed)}",
+      )
+    }
+    return try {
+      JSONObject(trimmed)
+    } catch (e: Exception) {
+      throw IllegalStateException(
+        "Unexpected non-JSON response from $where: ${summarizeBody(trimmed)}",
+        e,
+      )
+    }
+  }
+
+  private fun summarizeBody(raw: String): String {
+    val oneLine = raw.replace(Regex("""\s+"""), " ").trim()
+    return oneLine.take(180)
+  }
+
   private fun parse(raw: String): QuickAnalyzeResult {
-    val root = JSONObject(raw)
+    val root = parseJsonObject(raw, "analyze")
     if (root.has("error") && !root.isNull("error")) {
       val err = root.optJSONObject("error")
       throw IllegalStateException(err?.optString("message") ?: "Analyze failed")
