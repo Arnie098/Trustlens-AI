@@ -74,27 +74,44 @@ export async function analyzeContentServer(input: AnalysisInput): Promise<Analys
   const requiresVision = input.type === "image" && Boolean(input.imageUrl?.trim());
 
   // 1) Pixel vision FIRST when a fetchable imageUrl is present.
-  // Free DeepSeek/cookie paths cannot see the image — they must not run before this
-  // or mobile screenshot analysis becomes generic OCR/meta text.
   if (requiresVision && hasPerplexityKey()) {
     try {
       return asPublicResult(await perplexityAnalyze(input), "perplexity");
     } catch (err) {
       console.error("[analyze] Perplexity vision path failed:", err);
-      // Do NOT fall through to text-only for imageUrl requests — that produces
-      // "without examining the content directly" cards. Surface the vision error.
+      // Last resort for mobile screenshots: analyze OCR/caption text rather than 500.
+      // Never invent vision — mark the summary clearly.
+      const ocr = input.text?.trim();
+      if (ocr && ocr.length >= 20) {
+        try {
+          const textResult = await perplexityAnalyze({
+            type: "text",
+            text:
+              "The following text was extracted from a mobile social screenshot (OCR / helper). " +
+              "Analyze the post content itself (not the fact it is a screenshot):\n\n" +
+              ocr.slice(0, 5500),
+          });
+          return asPublicResult(
+            {
+              ...textResult,
+              summary: `${textResult.summary} (On-screen text only — image vision failed.)`,
+              confidence: Math.min(textResult.confidence, 70),
+            },
+            "perplexity",
+          );
+        } catch (textErr) {
+          console.error("[analyze] OCR text fallback also failed:", textErr);
+        }
+      }
       throw err instanceof Error
         ? err
         : new Error("Vision analysis failed for the uploaded screenshot.");
     }
   }
 
-  // Screenshots with imageUrl must not degrade to text-only "filename" analysis.
-  if (requiresVision) {
+  if (requiresVision && !hasPerplexityKey()) {
     throw new Error(
-      hasPerplexityKey()
-        ? "Vision analysis failed for the uploaded screenshot."
-        : "Screenshot analysis requires PERPLEXITY_API_KEY (vision) on the server.",
+      "Screenshot analysis requires PERPLEXITY_API_KEY (vision) on the server.",
     );
   }
 
