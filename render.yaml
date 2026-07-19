@@ -47,8 +47,9 @@ services:
         value: "https://cc.freemodel.dev"
       - key: CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
         value: "1"
-      # freemodel model id for mobile screenshot vision
+      # freemodel catalog id (models.dev/providers/freemodel). Server retries
+      # opus-4-7 → 4-6 → sonnet-4-6 → haiku if the preferred id 404s.
       - key: CLAUDE_VISION_MODEL
-        value: "claude-opus-4.8"
+        value: "claude-opus-4-8"
       - key: ANTHROPIC_MODEL
-        value: "claude-opus-4.8"
+        value: "claude-opus-4-8"

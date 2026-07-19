@@ -59,38 +59,70 @@ export async function handleAnalyzeApi(request: Request): Promise<Response> {
     }
 
     const data = await analyzeContentServer(body);
-    return json({ data, error: null, ...analyzeProviderInfo() });
+    // config = env capabilities; data.engine_path = path that actually ran
+    return json({
+      data,
+      error: null,
+      config: analyzeProviderInfo(),
+      // Keep top-level provider for older clients, but prefer data.engine_path
+      provider: data.provider,
+      engine_path: data.engine_path,
+      engine_detail: data.engine_detail,
+      ...analyzeProviderInfo(),
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("[api/analyze]", message);
     // Safe client messages — include actionable vision/upload hints without secrets
     let safe = "Analysis failed. Please try again.";
+    let fail_path: string | undefined;
     if (/cookie|sse|session|PERPLEXITY_COOKIES|cloudflare|web session/i.test(message)) {
       safe = "Analysis is temporarily unavailable. Please try again.";
+      fail_path = "cookie_session";
     } else if (/ANTHROPIC_API_KEY|CLAUDE_API_KEY is not set/i.test(message)) {
       safe =
         "Screenshot vision needs ANTHROPIC_API_KEY (Claude) or PERPLEXITY_API_KEY on the server.";
+      fail_path = "claude_vision_missing_key";
     } else if (/PERPLEXITY_API_KEY is not set/i.test(message)) {
       safe =
         "Set PERPLEXITY_API_KEY or ANTHROPIC_API_KEY on the server for screenshot vision.";
-    } else if (/Claude API \d+/i.test(message)) {
+      fail_path = "perplexity_missing_key";
+    } else if (/Claude API \d+|Claude vision failed|Claude non-JSON/i.test(message)) {
       safe = "Claude vision is temporarily unavailable. Please try again.";
+      fail_path = "claude_vision";
     } else if (/public https imageUrl|missing public imageUrl|imageUrl from POST/i.test(message)) {
       safe = "Screenshot upload did not return a public image URL. Try Analyze again.";
+      fail_path = "upload_url";
     } else if (/Vision image too large|too large/i.test(message)) {
       safe = "Screenshot is too large to analyze. Try again with a shorter capture.";
+      fail_path = "vision_payload";
     } else if (/Could not fetch image|local upload read|data-URI|disk/i.test(message)) {
       safe = "Could not load the uploaded screenshot for vision. Try Analyze again.";
+      fail_path = "vision_load";
     } else if (/blind \(non-vision\)|filename-only/i.test(message)) {
       safe = "The AI could not read the image pixels. Try Analyze again in a moment.";
+      fail_path = "blind_vision";
     } else if (/Perplexity API \d+/i.test(message)) {
       safe = "Live vision analysis is temporarily unavailable. Please try again.";
+      fail_path = "perplexity_vision";
     } else if (message.includes("Perplexity")) {
       safe = "Live analysis is temporarily unavailable. Please try again.";
-    } else if (/valid JSON|Empty response/i.test(message)) {
+      fail_path = "perplexity";
+    } else if (/valid JSON|Empty response|Empty Claude/i.test(message)) {
       safe = "The analysis service returned an incomplete result. Please try again.";
+      fail_path = "parse";
     }
-    return json({ error: { message: safe } }, 500);
+    // engine_path null = hard failure before a result; engine_detail = short reason for debug
+    return json(
+      {
+        error: { message: safe },
+        engine_path: null,
+        engine_detail: fail_path
+          ? `${fail_path}: ${message.slice(0, 220)}`
+          : message.slice(0, 220),
+      },
+      500,
+    );
   }
 }
 
