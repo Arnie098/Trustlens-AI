@@ -81,13 +81,25 @@ export async function analyzeContentServer(input: AnalysisInput): Promise<Analys
       return asPublicResult(await perplexityAnalyze(input), "perplexity");
     } catch (err) {
       console.error("[analyze] Perplexity vision path failed:", err);
-      // fall through only if vision truly fails
+      // Do NOT fall through to text-only for imageUrl requests — that produces
+      // "without examining the content directly" cards. Surface the vision error.
+      throw err instanceof Error
+        ? err
+        : new Error("Vision analysis failed for the uploaded screenshot.");
     }
   }
 
+  // Screenshots with imageUrl must not degrade to text-only "filename" analysis.
+  if (requiresVision) {
+    throw new Error(
+      hasPerplexityKey()
+        ? "Vision analysis failed for the uploaded screenshot."
+        : "Screenshot analysis requires PERPLEXITY_API_KEY (vision) on the server.",
+    );
+  }
+
   // 2) Hackathon free: DeepSeek API + Perplexity cookies (text/url — no pixel vision)
-  // Skip when caller expected vision (imageUrl set) so we don't pretend we saw the screen.
-  if (!requiresVision && useFreeHybridPipeline()) {
+  if (useFreeHybridPipeline()) {
     try {
       return asPublicResult(await deepseekThenPerplexityCookie(input), "perplexity");
     } catch (err) {
@@ -95,21 +107,12 @@ export async function analyzeContentServer(input: AnalysisInput): Promise<Analys
     }
   }
 
-  // 3) Free hybrid as fallback for text/url only
-  if (!requiresVision && canUseFreeDeepSeekPerplexityPipeline()) {
+  // 3) Free hybrid as fallback for text/url
+  if (canUseFreeDeepSeekPerplexityPipeline()) {
     try {
       return asPublicResult(await deepseekThenPerplexityCookie(input), "perplexity");
     } catch (err) {
       console.error("[analyze] Free pipeline fallback failed:", err);
-    }
-  }
-
-  // 3b) Image without vision key: OCR/caption text path via free hybrid if available
-  if (requiresVision && !hasPerplexityKey() && canUseFreeDeepSeekPerplexityPipeline()) {
-    try {
-      return asPublicResult(await deepseekThenPerplexityCookie(input), "perplexity");
-    } catch (err) {
-      console.error("[analyze] Image OCR text path failed:", err);
     }
   }
 
