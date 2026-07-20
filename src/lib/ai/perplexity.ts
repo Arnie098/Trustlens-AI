@@ -34,7 +34,7 @@ export function hasPerplexityKey(): boolean {
   return Boolean(process.env.PERPLEXITY_API_KEY?.trim());
 }
 
-export const SYSTEM_PROMPT = `You are TrustLensAI, a media and information literacy analyst powered by live web search.
+export const SYSTEM_PROMPT = `You are VeriSphere AI, a media and information literacy analyst powered by live web search.
 You do NOT declare absolute truth. You gather signals, evidence, and concerns so people can decide carefully.
 
 YOUR JOB (do this yourself — do NOT tell the user to do research you can do):
@@ -80,36 +80,39 @@ export function buildUserPrompt(input: AnalysisInput): string {
   if (input.type === "text" && input.text) {
     return `${duty}\n\nAnalyze this claim or excerpt (corroboration, contradictions, provenance):\n"""\n${input.text.slice(0, 6000)}\n"""`;
   }
-  // Image path: when we can send the actual image (imageUrl), instruct real visual inspection.
-  if (input.imageUrl) {
+  // Image path: when we can send the actual image (imageUrl / imageBase64), instruct real visual inspection.
+  if (input.imageUrl || input.imageBase64) {
     const isScreen =
       /screen|capture|social-feed|facebook|social/i.test(input.imageName || "") ||
-      /mobile_social_screenshot|social app|facebook|HELPER_OCR/i.test(input.text || "");
+      /mobile_social_screenshot|social app|facebook|HELPER_OCR|imageBase64/i.test(input.text || "");
     const caption = input.text?.trim()
       ? `\nClient helper notes (may be wrong — the attached IMAGE is ground truth):\n"""\n${input.text.slice(0, 4000)}\n"""`
       : "";
     if (isScreen) {
       return `${duty}
 
-You are given a PHOTOGRAPH of a phone screen showing a social feed (often Facebook).
+You are given a PHOTOGRAPH of a phone screen showing a social feed (often Facebook). The IMAGE BYTES are attached — you CAN see the pixels.
 
-CRITICAL RULES:
-- Analyze the MAIN POST in the feed (person/page name, caption, photos, article preview, claim, ad, meme, game, etc.).
-- Do NOT analyze TrustLens, any floating verification card, "quick check", analyzer branding, or media-literacy product marketing — even if those words appear in helper notes or the filename.
-- Do NOT invent that the content is about a URL-safety tool unless that is clearly the post itself.
-- Ignore status bar text (clock, battery, signal), "15+", reaction counts, and bottom navigation when they are only chrome.
-- Prefer the attached image pixels over OCR helper text (OCR often misreads the clock/status bar).
+CRITICAL RULES (pixel-first):
+- FIRST describe what is VISIBLE: main photo/video thumbnail, page name, headline, caption, link preview card.
+- If a large photo is on screen (animal, person, landscape, graphic), you MUST mention it. NEVER write that there is "no accompanying photo/image" when one is visible.
+- NEVER frame the post as "OCR-derived" or "OCR-only". OCR helper notes are incomplete and often garbage (status bar, partial words).
+- Prefer image pixels over HELPER_OCR always. Use OCR only to recover hard-to-read caption words AFTER you looked at the picture.
+- Analyze the MAIN POST (page name, caption, photos, article preview, claim, ad, meme).
+- Do NOT analyze VeriSphere, floating cards, "quick check", or media-literacy app chrome.
+- Ignore status bar (clock, battery, signal), "15+", reaction counts, bottom nav when only chrome.
 
 Do this:
-1) summary: Name what the post actually shows (e.g. "A Facebook post by X about Y with photo of Z") + one trust signal. Max 2 sentences.
-2) Extract concrete factual claims from the post, or state clearly it is non-claim content (personal photo, entertainment, event promo without hard facts).
-3) Non-claim / entertainment / pure personal photo: score typically 70–92; light concerns only.
-4) Hard factual claims: search the web yourself; put concrete findings in evidence (not generic tips).
-5) source_assessment / context_analysis: about the POST author/outlet, not about TrustLens.
+1) summary: Start with what the picture shows + page/headline (e.g. "Facebook post by Philstar.com: photo of a Philippine eagle with headline about…"). Max 2–3 sentences.
+2) Extract factual claims from headline+caption+preview, or mark as non-claim visual content.
+3) Hard claims: search the web; put concrete findings in evidence (outlet + finding).
+4) source_assessment: about the POST page/outlet (e.g. Philstar), not about OCR quality.
+5) context_analysis: framing of THIS post; do not invent missing photos.
 6) concerns: about THIS post only.
+7) next_steps: only pause/share guidance based on your findings — never "search yourself" homework.
 ${caption}`;
     }
-    return `${duty}\n\nInspect the attached image itself and analyze only the content visible in it. Identify its factual claims, visual framing, source/provenance signals, and possible editing or synthetic-media cues. Then search the web yourself for original material, official records, fact-checks, and independent coverage that support or contradict those claims. Do not analyze the TrustLens product unless it is the subject of the image.${caption}`;
+    return `${duty}\n\nInspect the attached image itself and analyze only the content visible in it. Identify its factual claims, visual framing, source/provenance signals, and possible editing or synthetic-media cues. Then search the web yourself for original material, official records, fact-checks, and independent coverage that support or contradict those claims. Do not analyze the VeriSphere product unless it is the subject of the image.${caption}`;
   }
   return `${duty}\n\nAnalyze this image submission for media-literacy / authenticity signals. Filename or label: ${input.imageName || "uploaded image"}. Note limitations if you cannot see the binary image; use web knowledge about common AI-image and manipulation cues.`;
 }
@@ -197,7 +200,7 @@ export function buildUserContent(
   return prompt;
 }
 
-/** Model admitted it never looked at the pixels. */
+/** Model admitted it never looked at the pixels, or OCR-only framing. */
 export function looksLikeBlindVisionResult(summary: string, source: string, context: string): boolean {
   const blob = `${summary}\n${source}\n${context}`.toLowerCase();
   return (
@@ -206,7 +209,14 @@ export function looksLikeBlindVisionResult(summary: string, source: string, cont
     /relies on the described image label/.test(blob) ||
     /cannot (see|view|inspect|access) (the )?(image|screenshot|content)/.test(blob) ||
     /unable to (see|view|inspect) (the )?(image|screenshot)/.test(blob) ||
-    /image label provided/.test(blob)
+    /image label provided/.test(blob) ||
+    /ocr[- ]derived/.test(blob) ||
+    /ocr[- ]only/.test(blob) ||
+    /fragmented ocr/.test(blob) ||
+    /without accompanying (photos?|images?|pictures?)/.test(blob) ||
+    /no accompanying (photos?|images?|pictures?)/.test(blob) ||
+    /no (photo|image|picture) (is |was )?(included|present|visible|shown)/.test(blob) ||
+    /text[- ]only (assessment|analysis|excerpt)/.test(blob)
   );
 }
 

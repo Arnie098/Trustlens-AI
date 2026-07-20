@@ -19,7 +19,7 @@ import android.util.Log
  * before [MediaProjectionManager.getMediaProjection] will succeed.
  *
  * After capture, analyzes via HTTP and shows a floating result card
- * **without** forcing the user back into the TrustLens app UI.
+ * **without** forcing the user back into the VeriSphere app UI.
  */
 class MediaProjectionCaptureService : Service() {
   companion object {
@@ -70,12 +70,22 @@ class MediaProjectionCaptureService : Service() {
 
     Thread {
       try {
-        // Let the permission dialog, TrustLens UI, and notifications clear
+        // Let the permission dialog, VeriSphere UI, and notifications clear
         // so the frame is the underlying app (Facebook), not our chrome.
         CaptureNotifier.cancelProgress(this)
         FloatingResultOverlay.dismiss()
+        FloatingResultOverlay.showAnalyzing(
+          this,
+          AnalyzeLoadStage.CAPTURE,
+          "Waiting for a clean frame (hiding our UI)…",
+        )
         Thread.sleep(1100)
 
+        FloatingResultOverlay.updateAnalyzing(
+          this,
+          AnalyzeLoadStage.CAPTURE,
+          "Requesting MediaProjection frame…",
+        )
         val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         val projection: MediaProjection =
           try {
@@ -91,17 +101,34 @@ class MediaProjectionCaptureService : Service() {
               "Could not start screen capture. Allow the permission and try again.",
             )
 
+        FloatingResultOverlay.updateAnalyzing(
+          this,
+          AnalyzeLoadStage.CAPTURE,
+          "Grabbing pixels from your screen…",
+        )
         val path = ScreenCaptureHelper.captureFrame(applicationContext, projection)
         Log.i(TAG, "Capture OK: $path")
 
-        FloatingResultOverlay.showAnalyzing(this)
+        FloatingResultOverlay.updateAnalyzing(
+          this,
+          AnalyzeLoadStage.PREPARE,
+          "Screenshot saved · preparing for AI…",
+        )
         CaptureNotifier.showProgress(
           this,
           "Analyzing…",
-          "Running TrustLens AI — stay on this screen.",
+          "VeriSphere AI is running — stay on this screen.",
         )
 
-        val result = AnalyzeClient.analyzeScreenshot(applicationContext, path)
+        val result =
+          AnalyzeClient.analyzeScreenshot(applicationContext, path) { stage, detail ->
+            FloatingResultOverlay.updateAnalyzing(this, stage, detail)
+          }
+        FloatingResultOverlay.updateAnalyzing(
+          this,
+          AnalyzeLoadStage.FINISH,
+          "Done · opening result…",
+        )
         mainSucceed(result, path)
       } catch (e: Exception) {
         Log.e(TAG, "Capture/analyze failed", e)
@@ -114,7 +141,7 @@ class MediaProjectionCaptureService : Service() {
 
   private fun startAsMediaProjectionForeground() {
     ensureChannel()
-    // No content intent → tapping the FGS notification must not open TrustLens.
+    // No content intent → tapping the FGS notification must not open VeriSphere.
     val noop =
       PendingIntent.getBroadcast(
         this,
@@ -125,7 +152,7 @@ class MediaProjectionCaptureService : Service() {
     val notification: Notification =
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         Notification.Builder(this, CHANNEL_ID)
-          .setContentTitle("TrustLens screen capture")
+          .setContentTitle("VeriSphere screen capture")
           .setContentText("Capturing & analyzing — stay in your app")
           .setSmallIcon(android.R.drawable.ic_menu_camera)
           .setContentIntent(noop)
@@ -134,7 +161,7 @@ class MediaProjectionCaptureService : Service() {
       } else {
         @Suppress("DEPRECATION")
         Notification.Builder(this)
-          .setContentTitle("TrustLens screen capture")
+          .setContentTitle("VeriSphere screen capture")
           .setContentText("Capturing & analyzing — stay in your app")
           .setSmallIcon(android.R.drawable.ic_menu_camera)
           .setContentIntent(noop)
@@ -160,7 +187,7 @@ class MediaProjectionCaptureService : Service() {
     nm.createNotificationChannel(
       NotificationChannel(
         CHANNEL_ID,
-        "TrustLens media projection",
+        "VeriSphere media projection",
         NotificationManager.IMPORTANCE_LOW,
       ).apply {
         description = "Required while capturing the screen"
@@ -173,7 +200,7 @@ class MediaProjectionCaptureService : Service() {
       CaptureNotifier.cancelProgress(this)
       CaptureNotifier.showInfo(
         this,
-        "TrustLens · score ${result.trustScore}",
+        "VeriSphere · score ${result.trustScore}",
         result.summary.take(100),
       )
       FloatingResultOverlay.showResult(this, result)

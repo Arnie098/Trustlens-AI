@@ -273,25 +273,58 @@ const JSON_RETRY_SUFFIX =
   "\n\nRespond with ONLY one JSON object matching the schema. No markdown, no prose outside the JSON.";
 
 /**
- * Analyze a mobile screenshot with Claude vision.
+ * Resolve image bytes for Claude: prefer direct base64 (mobile), else public URL/disk.
+ */
+async function resolveClaudeImage(
+  input: AnalysisInput,
+): Promise<{ mediaType: string; base64: string; source: string }> {
+  const raw = input.imageBase64?.trim() || "";
+  if (raw) {
+    if (raw.startsWith("data:")) {
+      const parsed = parseDataUri(raw);
+      return { ...parsed, source: "imageBase64_data_uri" };
+    }
+    const mediaType =
+      input.imageMediaType?.trim() ||
+      (input.imageName?.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg");
+    // strip whitespace/newlines some clients add
+    const base64 = raw.replace(/\s+/g, "");
+    if (base64.length < 64) throw new Error("imageBase64 too short");
+    return { mediaType, base64, source: "imageBase64" };
+  }
+
+  const url = input.imageUrl?.trim();
+  if (!url) {
+    throw new Error(
+      "Claude vision requires imageBase64 (preferred) or imageUrl from POST /api/uploads",
+    );
+  }
+  const dataUri = await resolveVisionDataUri(url);
+  const parsed = parseDataUri(dataUri);
+  return { ...parsed, source: "imageUrl" };
+}
+
+/**
+ * Analyze a mobile screenshot with Claude vision (image bytes in the API call).
  */
 export async function claudeVisionAnalyze(input: AnalysisInput): Promise<AnalysisResult> {
   const apiKey = claudeApiKey();
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY (or CLAUDE_API_KEY) is not set");
 
-  const url = input.imageUrl?.trim();
-  if (!url) {
-    throw new Error("Claude vision requires imageUrl from POST /api/uploads");
-  }
-
-  const dataUri = await resolveVisionDataUri(url);
-  const { mediaType, base64 } = parseDataUri(dataUri);
-  const prompt = buildUserPrompt(input);
+  const { mediaType, base64, source } = await resolveClaudeImage(input);
+  // Ensure prompt path treats this as a real image (buildUserPrompt checks imageUrl)
+  const promptInput: AnalysisInput = {
+    ...input,
+    type: "image",
+    imageUrl: input.imageUrl?.trim() || "inline://screenshot",
+    imageName: input.imageName || "social-feed-screenshot.jpg",
+  };
+  const prompt = buildUserPrompt(promptInput);
   const endpoint = claudeMessagesUrl();
   const models = candidateModels();
 
   console.info(
-    `[claude-vision] endpoint=${endpoint} candidates=${models.join(",")} media=${mediaType} b64KB=${Math.round(base64.length / 1024)}`,
+    `[claude-vision] source=${source} endpoint=${endpoint} candidates=${models.join(",")} media=${mediaType} b64KB=${Math.round(base64.length / 1024)}`,
   );
 
   const errors: string[] = [];
@@ -348,7 +381,7 @@ export async function claudeVisionAnalyze(input: AnalysisInput): Promise<Analysi
       }
 
       console.info(`[claude-vision] success model=${used}`);
-      const result = normalizeResult(parsed, input, []);
+      let result = normalizeResult(parsed, input, []);
 
       if (
         looksLikeBlindVisionResult(
@@ -357,7 +390,37 @@ export async function claudeVisionAnalyze(input: AnalysisInput): Promise<Analysi
           result.context_analysis,
         )
       ) {
-        console.warn(`[claude-vision] blind-looking summary with model=${used}`);
+        // OCR-biased / blind answers — one forced re-look at the image
+        console.warn(`[claude-vision] blind/OCR-framed answer from ${used}; re-prompting`);
+        try {
+          const strict =
+            prompt +
+            "\n\nREDO: You MUST open with what the PHOTO shows (subject, page name, headline). " +
+            "Do NOT say OCR-derived, no accompanying photo, or text-only. Return JSON only.";
+          ({ text, model: used } = await callClaudeOnce(
+            endpoint,
+            apiKey,
+            model,
+            mediaType,
+            base64,
+            strict,
+          ));
+          result = normalizeResult(extractJson(text) as Record<string, unknown>, input, []);
+        } catch (reErr) {
+          console.warn(`[claude-vision] re-prompt failed:`, reErr);
+        }
+        if (
+          looksLikeBlindVisionResult(
+            result.summary,
+            result.source_assessment,
+            result.context_analysis,
+          )
+        ) {
+          // Still blind — try next model rather than ship a broken card
+          throw new Error(
+            `Blind/OCR-framed vision result model=${used}: ${result.summary.slice(0, 120)}`,
+          );
+        }
       }
 
       return {

@@ -71,7 +71,7 @@ class FloatingBubbleService : Service() {
     handler.post {
       CaptureNotifier.showInfo(
         this,
-        "TrustLens bubble is on",
+        "VeriSphere bubble is on",
         "Look for the teal “TL” on the right edge. Open Facebook, tap TL → Analyze content on my screen.",
       )
     }
@@ -89,13 +89,13 @@ class FloatingBubbleService : Service() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       val channel = NotificationChannel(
         channelId,
-        "TrustLens Assist",
+        "VeriSphere Assist",
         NotificationManager.IMPORTANCE_LOW
       )
       channel.description = "Floating verify assist is on"
       getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
-    // Do not open TrustLens when user taps the ongoing notification
+    // Do not open VeriSphere when user taps the ongoing notification
     val pi = PendingIntent.getBroadcast(
       this,
       42,
@@ -104,7 +104,7 @@ class FloatingBubbleService : Service() {
     )
     val notification: Notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       Notification.Builder(this, channelId)
-        .setContentTitle("TrustLens assist is on")
+        .setContentTitle("VeriSphere assist is on")
         .setContentText("Tap the teal TL bubble → analyze content on your screen")
         .setSmallIcon(android.R.drawable.ic_menu_info_details)
         .setContentIntent(pi)
@@ -113,7 +113,7 @@ class FloatingBubbleService : Service() {
     } else {
       @Suppress("DEPRECATION")
       Notification.Builder(this)
-        .setContentTitle("TrustLens assist is on")
+        .setContentTitle("VeriSphere assist is on")
         .setContentText("Tap the teal TL bubble → analyze content on your screen")
         .setSmallIcon(android.R.drawable.ic_menu_info_details)
         .setContentIntent(pi)
@@ -147,7 +147,7 @@ class FloatingBubbleService : Service() {
       }
     }
 
-    // Gradient "coin" with the TrustLens logo mark
+    // Gradient "coin" with the VeriSphere logo mark
     val coin = FrameLayout(this).apply {
       background = GradientDrawable(
         GradientDrawable.Orientation.TL_BR,
@@ -263,7 +263,7 @@ class FloatingBubbleService : Service() {
     } catch (e: Exception) {
       CaptureNotifier.showError(
         this,
-        "Could not show floating bubble. Allow “Display over other apps” for TrustLens in Settings.",
+        "Could not show floating bubble. Allow “Display over other apps” for VeriSphere in Settings.",
       )
       stopSelf()
       return
@@ -404,7 +404,7 @@ class FloatingBubbleService : Service() {
     }
 
     panel.addView(TextView(this).apply {
-      text = "TrustLens"
+      text = "VeriSphere AI"
       setTextColor(Color.parseColor("#0c2340"))
       textSize = 16f
       setTypeface(typeface, android.graphics.Typeface.BOLD)
@@ -417,7 +417,7 @@ class FloatingBubbleService : Service() {
       setPadding(0, 0, 0, dp(10))
     })
 
-    // Primary action: screenshot (by TrustLens) → AI analyze
+    // Primary action: screenshot (by VeriSphere) → AI analyze
     addBtn(
       "Analyze content on my screen",
       "1) Screenshot  2) AI analyzes  ·  you approve once",
@@ -431,6 +431,15 @@ class FloatingBubbleService : Service() {
       "Only if you already copied a caption",
     ) {
       openAssist("clipboard")
+    }
+
+    val histN = AnalyzeHistoryStore.count()
+    addBtn(
+      if (histN > 0) "Past checks ($histN)" else "Past checks",
+      "Re-open earlier floating results — nothing auto-closes",
+    ) {
+      hideMenu()
+      FloatingResultOverlay.showHistory(this)
     }
 
     panel.addView(TextView(this).apply {
@@ -465,7 +474,7 @@ class FloatingBubbleService : Service() {
   /**
    * Hide bubble/menu, then open the *invisible* capture activity (own task) so
    * Android can show only the MediaProjection permission dialog. Results stay
-   * as a floating overlay — MainActivity / TrustLens UI must not come forward.
+   * as a floating overlay — MainActivity / VeriSphere UI must not come forward.
    */
   private fun startScreenCapture() {
     halfHideRunnable?.let { handler.removeCallbacks(it) }

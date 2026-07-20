@@ -43,53 +43,82 @@ object AnalyzeClient {
   /** Keep text readable for vision + OCR of social posts */
   private const val MAX_LONG_EDGE = 1920
   private const val JPEG_QUALITY = 90
+  /** freemodel vision + Render cold starts often exceed 90s. */
+  private const val UPLOAD_CONNECT_MS = 45_000
+  private const val UPLOAD_READ_MS = 90_000
+  private const val ANALYZE_CONNECT_MS = 45_000
+  private const val ANALYZE_READ_MS = 240_000
 
-  fun analyzeScreenshot(ctx: Context, imagePath: String): QuickAnalyzeResult {
-    val ocr = ScreenTextExtractor.extract(imagePath)
-    val jpeg = compressForUpload(imagePath)
-    Log.i(TAG, "upload jpeg bytes=${jpeg.size} ocrChars=${ocr.length}")
-
-    val publicUrl =
+  fun analyzeScreenshot(
+    ctx: Context,
+    imagePath: String,
+    onStatus: ((AnalyzeLoadStage, String) -> Unit)? = null,
+  ): QuickAnalyzeResult {
+    fun status(stage: AnalyzeLoadStage, detail: String) {
       try {
-        uploadToServer(ctx, jpeg)
-      } catch (e: Exception) {
-        val msg = e.message ?: "Upload failed"
-        throw IllegalStateException(
-          "Server upload required (POST /api/uploads). " +
-            "Deploy the upload API on ${TrustLensConfig.apiBase(ctx)}. ($msg)",
-          e,
-        )
+        onStatus?.invoke(stage, detail)
+      } catch (_: Exception) {
       }
-    Log.i(TAG, "public imageUrl=$publicUrl")
+    }
 
-    // Neutral caption — do NOT mention TrustLens/product names (biases web search).
+    // Compress → send JPEG bytes straight to Claude (no upload hop, no OCR-primary path).
+    status(AnalyzeLoadStage.PREPARE, "Compressing screenshot for Claude vision…")
+    val jpeg = compressForUpload(imagePath)
+    val b64 = Base64.encodeToString(jpeg, Base64.NO_WRAP)
+    Log.i(TAG, "direct Claude jpeg bytes=${jpeg.size} b64KB=${b64.length / 1024}")
+
+    status(
+      AnalyzeLoadStage.UPLOAD,
+      "Sending image (${jpeg.size / 1024} KB) to Claude via server…",
+    )
+
+    // Minimal prompt — model must look at the attached image, not OCR noise.
     val caption =
-      buildString {
-        appendLine("TYPE: mobile_social_screenshot")
-        appendLine("TASK: Analyze ONLY the main social feed post visible in the attached image.")
-        appendLine("Ignore status bar, clocks, battery, notification badges, and bottom nav.")
-        appendLine("Do NOT describe or evaluate any analyzer app, floating card, or brand overlay.")
-        if (ocr.isNotBlank()) {
-          appendLine("HELPER_OCR (secondary; image is ground truth):")
-          append(ocr.take(3500))
-        } else {
-          append("HELPER_OCR: none useful — use image pixels only.")
-        }
-      }
+      """
+      TYPE: mobile_social_screenshot
+      TASK: The JPEG image is attached as imageBase64. Analyze ONLY what you see in the pixels.
+      Describe the main photo, page name, headline, and caption. Ignore status bar and app chrome.
+      NEVER claim there is no photo if a photo is visible. Do not invent OCR-only framing.
+      """.trimIndent()
 
     val body =
       JSONObject()
         .put("type", "image")
-        // Neutral name — "trustlens-*" makes the model talk about TrustLens instead of the post
         .put("imageName", "social-feed-screenshot.jpg")
-        .put("imageUrl", publicUrl)
+        .put("imageMediaType", "image/jpeg")
+        .put("imageBase64", b64)
         .put("text", caption)
 
-    val result = postJson(ctx, "/api/analyze", body)
-    val excerpt =
-      if (ocr.isNotBlank()) ocr.take(160)
-      else "Using full image (OCR was status-bar/UI only)"
-    return result.copy(excerpt = excerpt)
+    status(
+      AnalyzeLoadStage.VISION,
+      "Claude is looking at your screenshot (often 30s–2 min)…",
+    )
+    val result =
+      try {
+        postJson(ctx, "/api/analyze", body)
+      } catch (e: Exception) {
+        throw IllegalStateException(friendlyNetError("Analysis", e), e)
+      }
+    status(AnalyzeLoadStage.FINISH, "Building your result card…")
+    return result.copy(excerpt = "Claude vision · full screenshot")
+  }
+
+  private fun friendlyNetError(phase: String, e: Exception): String {
+    val raw = (e.message ?: e.javaClass.simpleName).trim()
+    val lower = raw.lowercase()
+    return when {
+      lower.contains("timeout") ||
+        lower.contains("timed out") ||
+        e is java.net.SocketTimeoutException ->
+        "$phase took too long (AI vision can need 2–3 min on first try). Tap Analyze again."
+      lower.contains("unable to resolve") || lower.contains("unknownhost") ->
+        "$phase failed: no internet / cannot reach server."
+      lower.contains("connection") && (lower.contains("refused") || lower.contains("reset")) ->
+        "$phase failed: server connection dropped. Try again in a moment."
+      raw.equals("timeout", ignoreCase = true) ->
+        "$phase timed out. Try again — vision analysis can take a while."
+      else -> raw.take(220)
+    }
   }
 
   fun analyzeText(ctx: Context, text: String): QuickAnalyzeResult {
@@ -157,8 +186,8 @@ object AnalyzeClient {
     val conn =
       (url.openConnection() as HttpURLConnection).apply {
         requestMethod = "POST"
-        connectTimeout = 30_000
-        readTimeout = 60_000
+        connectTimeout = UPLOAD_CONNECT_MS
+        readTimeout = UPLOAD_READ_MS
         doOutput = true
         setRequestProperty("Content-Type", "application/json; charset=utf-8")
         setRequestProperty("Accept", "application/json")
@@ -194,8 +223,8 @@ object AnalyzeClient {
     val conn =
       (url.openConnection() as HttpURLConnection).apply {
         requestMethod = "POST"
-        connectTimeout = 30_000
-        readTimeout = 90_000
+        connectTimeout = ANALYZE_CONNECT_MS
+        readTimeout = ANALYZE_READ_MS
         doOutput = true
         setRequestProperty("Content-Type", "application/json; charset=utf-8")
         setRequestProperty("Accept", "application/json")
