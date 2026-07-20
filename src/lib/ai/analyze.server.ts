@@ -1,9 +1,9 @@
 /**
  * Server-side content analysis.
  *
- * Mobile screenshot (imageUrl) vision priority:
+ * Mobile screenshot vision priority (imageBase64 preferred, or imageUrl):
  *   1) PERPLEXITY_API_KEY → Sonar vision
- *   2) ANTHROPIC_API_KEY / CLAUDE_API_KEY → Claude vision (screenshot-only)
+ *   2) ANTHROPIC_API_KEY / CLAUDE_API_KEY → Claude vision (bytes in request)
  *   3) OCR/text via free DeepSeek + cookies
  *
  * Every result includes engine_path = which path actually ran.
@@ -75,11 +75,31 @@ function useFreeHybridPipeline(): boolean {
   return !hasPerplexityKey();
 }
 
+function hasVisionPayload(input: AnalysisInput): boolean {
+  return Boolean(input.imageBase64?.trim() || input.imageUrl?.trim());
+}
+
 export async function analyzeContentServer(input: AnalysisInput): Promise<AnalysisResult> {
-  const requiresVision = input.type === "image" && Boolean(input.imageUrl?.trim());
+  const requiresVision = input.type === "image" && hasVisionPayload(input);
   const visionErrors: string[] = [];
 
-  // 1) Perplexity vision
+  // Prefer Claude when mobile sent raw image bytes (direct vision).
+  const preferClaude =
+    requiresVision && hasClaudeKey() && Boolean(input.imageBase64?.trim());
+
+  // 1) Claude vision first for direct base64 screenshots
+  if (preferClaude) {
+    try {
+      const r = await claudeVisionAnalyze(input);
+      return asPublicResult(r, "claude", "claude_vision", r.engine_detail);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      visionErrors.push(`claude_vision: ${msg}`);
+      console.error("[analyze] Claude direct-vision path failed:", err);
+    }
+  }
+
+  // 2) Perplexity vision
   if (requiresVision && hasPerplexityKey()) {
     try {
       const r = await perplexityAnalyze(input);
@@ -88,7 +108,7 @@ export async function analyzeContentServer(input: AnalysisInput): Promise<Analys
       const msg = err instanceof Error ? err.message : String(err);
       visionErrors.push(`perplexity_vision: ${msg}`);
       console.error("[analyze] Perplexity vision path failed:", err);
-      if (hasClaudeKey()) {
+      if (hasClaudeKey() && !preferClaude) {
         try {
           const r = await claudeVisionAnalyze(input);
           return asPublicResult(
@@ -106,8 +126,8 @@ export async function analyzeContentServer(input: AnalysisInput): Promise<Analys
     }
   }
 
-  // 1a) Claude vision (freemodel or Anthropic) — screenshots only
-  if (requiresVision && hasClaudeKey()) {
+  // 3) Claude vision (URL or after Perplexity miss without base64-first path)
+  if (requiresVision && hasClaudeKey() && !preferClaude) {
     try {
       const r = await claudeVisionAnalyze(input);
       return asPublicResult(r, "claude", "claude_vision", r.engine_detail);
@@ -118,17 +138,20 @@ export async function analyzeContentServer(input: AnalysisInput): Promise<Analys
     }
   }
 
-  // 1b) Screenshot OCR / caption text fallback
+  // 1b) Screenshot OCR / caption text fallback (vision failed — be honest)
   if (requiresVision) {
     const ocr = input.text?.trim() || "";
     const textForAnalysis =
       ocr.length >= 12
-        ? "Analyze this social media post text taken from a mobile screenshot " +
-          "(OCR may have small errors). Judge the post content itself:\n\n" +
+        ? "IMPORTANT: Live image vision was unavailable. You only have imperfect OCR " +
+          "text from a social screenshot — NOT proof that the post lacked a photo. " +
+          "Do NOT claim 'no accompanying photo/image'. Frame as text-only limited check. " +
+          "Judge claims in the text only:\n\n" +
           ocr.slice(0, 5500)
-        : "A user captured a social media screenshot but little readable text was " +
-          "extracted. Assess typical trust risks for social posts with weak text " +
-          `(label: ${input.imageName || "screenshot"}).`;
+        : "IMPORTANT: Live image vision was unavailable and almost no OCR text was " +
+          "extracted from a social screenshot. Do a cautious, limited assessment. " +
+          "Do NOT invent missing photos or claim OCR proved there was no image. " +
+          `Label: ${input.imageName || "screenshot"}.`;
 
     const textInput: AnalysisInput = { type: "text", text: textForAnalysis };
     const failNote =
@@ -139,8 +162,8 @@ export async function analyzeContentServer(input: AnalysisInput): Promise<Analys
       asPublicResult(
         {
           ...r,
-          summary: `${r.summary} (Text from screen only.${failNote})`,
-          confidence: Math.min(r.confidence, 75),
+          summary: `${r.summary} (Text-only check — image vision unavailable.${failNote})`,
+          confidence: Math.min(r.confidence, 70),
         },
         r.provider === "claude" ? "claude" : path.startsWith("screenshot_ocr") ? "perplexity" : "mock",
         path,

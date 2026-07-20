@@ -44,14 +44,19 @@ export async function handleAnalyzeApi(request: Request): Promise<Response> {
     if (body.type === "text" && !body.text?.trim()) {
       return json({ error: { message: "text is required for type=text" } }, 400);
     }
-    // Image: prefer fetchable imageUrl (server upload / signed URL) for Perplexity vision.
-    // imageName alone is allowed as a degraded path.
-    if (body.type === "image" && !body.imageUrl && !body.imageName && !body.text?.trim()) {
+    // Image: imageBase64 (direct Claude vision) or imageUrl or degraded text/name.
+    if (
+      body.type === "image" &&
+      !body.imageBase64?.trim() &&
+      !body.imageUrl &&
+      !body.imageName &&
+      !body.text?.trim()
+    ) {
       return json(
         {
           error: {
             message:
-              "image requires imageUrl (preferred), imageName, or OCR text. Upload via POST /api/uploads first.",
+              "image requires imageBase64 (preferred for Claude), imageUrl, imageName, or OCR text.",
           },
         },
         400,

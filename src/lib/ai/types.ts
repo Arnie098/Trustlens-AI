@@ -7,8 +7,15 @@ export interface AnalysisInput {
   url?: string;
   text?: string;
   imageName?: string;
-  /** Fetchable image URL (e.g. signed Supabase URL) for vision-capable analysis. */
+  /** Fetchable image URL (e.g. signed Supabase URL / POST /api/uploads). */
   imageUrl?: string;
+  /**
+   * Raw image bytes as base64 (or data:image/...;base64,...) for direct Claude vision.
+   * Preferred for mobile screenshots — skips remote fetch.
+   */
+  imageBase64?: string;
+  /** MIME type when using imageBase64 (default image/jpeg). */
+  imageMediaType?: string;
 }
 
 /** Which code path produced this result (actual run, not just env config). */
