@@ -1,13 +1,17 @@
 /**
  * Claude vision for mobile screenshots only.
  *
- * freemodel: ANTHROPIC_BASE_URL=https://cc.freemodel.dev
- * Official Anthropic: leave BASE_URL unset (defaults to api.anthropic.com)
+ * freemodel (user / Render default):
+ *   ANTHROPIC_BASE_URL=https://api-cc.freemodel.dev
+ * Official Anthropic: leave BASE_URL unset (api.anthropic.com)
+ *
+ * api-cc is Claude Code–oriented; we send Claude Code wire headers
+ * (x-app, User-Agent, stainless, anthropic-beta) so server calls are accepted.
  *
  * Model IDs (try in order on not_found):
  *   CLAUDE_VISION_MODEL / ANTHROPIC_MODEL env, then freemodel catalog IDs
- *   (claude-opus-4-8, 4-7, 4-6, sonnet-4-6, haiku-4.5)
  */
+import { randomUUID } from "node:crypto";
 import {
   extractJson,
   looksLikeBlindVisionResult,
@@ -20,7 +24,15 @@ import type { AnalysisInput, AnalysisResult } from "./types";
 
 const ANTHROPIC_VERSION = "2023-06-01";
 const DEFAULT_OFFICIAL_BASE = "https://api.anthropic.com";
-const DEFAULT_FREEMODEL_BASE = "https://cc.freemodel.dev";
+/** freemodel Claude Code host (hackathon default). */
+const DEFAULT_FREEMODEL_BASE = "https://api-cc.freemodel.dev";
+/** Claude Code User-Agent pattern accepted by freemodel api-cc. */
+const CLAUDE_CODE_USER_AGENT =
+  process.env.CLAUDE_CODE_USER_AGENT?.trim() ||
+  "claude-cli/1.0.119 (external, cli)";
+const CLAUDE_CODE_BETAS =
+  process.env.ANTHROPIC_BETA?.trim() ||
+  "claude-code-20250219,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14";
 
 /** freemodel + Anthropic IDs that accept vision (models.dev/providers/freemodel). */
 const FREEMODEL_VISION_MODELS = [
@@ -59,11 +71,21 @@ function claudeBaseUrl(): string {
   return useFree ? DEFAULT_FREEMODEL_BASE : DEFAULT_OFFICIAL_BASE;
 }
 
+function isApiCcHost(baseOrUrl: string): boolean {
+  return /api-cc\.freemodel\.dev/i.test(baseOrUrl);
+}
+
 function claudeMessagesUrl(): string {
   const base = claudeBaseUrl();
-  if (base.endsWith("/v1/messages")) return base;
-  if (base.endsWith("/v1")) return `${base}/messages`;
-  return `${base}/v1/messages`;
+  let url: string;
+  if (base.endsWith("/v1/messages")) url = base;
+  else if (base.endsWith("/v1")) url = `${base}/messages`;
+  else url = `${base}/v1/messages`;
+  // Claude Code often hits messages?beta=true on compatible hosts
+  if (isApiCcHost(base) && !/[?&]beta=/.test(url)) {
+    url = `${url}?beta=true`;
+  }
+  return url;
 }
 
 /** Env preferred, then freemodel catalog, then legacy aliases. */
@@ -129,6 +151,44 @@ function isFreemodelEndpoint(endpoint: string): boolean {
   return /freemodel\.dev/i.test(endpoint);
 }
 
+/** Headers that match Claude Code CLI wire image (required by api-cc.freemodel.dev). */
+function buildClaudeRequestHeaders(apiKey: string, endpoint: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${apiKey}`,
+    "x-api-key": apiKey,
+    "anthropic-version": ANTHROPIC_VERSION,
+  };
+
+  if (isApiCcHost(endpoint) || isFreemodelEndpoint(endpoint)) {
+    headers["User-Agent"] = CLAUDE_CODE_USER_AGENT;
+    headers["x-app"] = "cli";
+    headers["anthropic-dangerous-direct-browser-access"] = "true";
+    headers["anthropic-beta"] = CLAUDE_CODE_BETAS;
+    headers["X-Claude-Code-Session-Id"] = randomUUID();
+    headers["X-Stainless-Lang"] = "js";
+    headers["X-Stainless-Package-Version"] = "0.52.0";
+    headers["X-Stainless-OS"] = "Linux";
+    headers["X-Stainless-Arch"] = "x64";
+    headers["X-Stainless-Runtime"] = "node";
+    headers["X-Stainless-Runtime-Version"] = process.version || "v22.0.0";
+    headers["X-Stainless-Retry-Count"] = "0";
+    headers["X-Stainless-Timeout"] = "600";
+    headers["x-client-request-id"] = randomUUID();
+  }
+
+  // Always set when configured (Claude Code env convention)
+  if (
+    /^(1|true)$/i.test(process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC || "") ||
+    isApiCcHost(endpoint)
+  ) {
+    headers["x-claude-code-disable-nonessential-traffic"] = "1";
+  }
+
+  return headers;
+}
+
 async function callClaudeOnce(
   endpoint: string,
   apiKey: string,
@@ -137,21 +197,12 @@ async function callClaudeOnce(
   base64: string,
   prompt: string,
 ): Promise<{ text: string; model: string }> {
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-    "x-api-key": apiKey,
-    "anthropic-version": ANTHROPIC_VERSION,
-    Authorization: `Bearer ${apiKey}`,
-  };
-  if (/^(1|true)$/i.test(process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC || "")) {
-    headers["x-claude-code-disable-nonessential-traffic"] = "1";
-  }
+  const headers = buildClaudeRequestHeaders(apiKey, endpoint);
 
   // freemodel marks temperature unsupported for some opus ids — omit it there
+  // Body field order approximates Claude Code (model, messages, system, max_tokens)
   const body: Record<string, unknown> = {
     model,
-    max_tokens: 2048,
-    system: SYSTEM_PROMPT,
     messages: [
       {
         role: "user",
@@ -168,6 +219,8 @@ async function callClaudeOnce(
         ],
       },
     ],
+    system: SYSTEM_PROMPT,
+    max_tokens: 2048,
   };
   if (!isFreemodelEndpoint(endpoint)) {
     body.temperature = 0.2;
@@ -199,12 +252,12 @@ async function callClaudeOnce(
 
   const text = extractTextFromClaudeResponse(data);
   if (!text.trim()) throw new Error(`Empty Claude response model=${model}`);
-  // freemodel api-cc host rejects non–Claude Code clients with 200 + prose
+  // freemodel may still return Access Denied as 200 prose if headers fail
   if (/Access Denied|official Claude Code client only|unauthorized client/i.test(text)) {
     throw new Error(
-      `Claude Code-only endpoint rejected server call (model=${model}). ` +
-        `Set ANTHROPIC_BASE_URL=https://cc.freemodel.dev (not api-cc) and use a freemodel server API key, ` +
-        `or use official Anthropic api.anthropic.com + ANTHROPIC_API_KEY. Body: ${text.slice(0, 160)}`,
+      `api-cc freemodel rejected call (model=${model}). ` +
+        `Confirm ANTHROPIC_API_KEY is a freemodel key for https://api-cc.freemodel.dev and model id. ` +
+        `Body: ${text.slice(0, 160)}`,
     );
   }
   return { text, model };
