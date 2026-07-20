@@ -251,7 +251,7 @@ export function analyzeProviderInfo(): {
   const claudeModel =
     process.env.CLAUDE_VISION_MODEL?.trim() ||
     process.env.ANTHROPIC_MODEL?.trim() ||
-    (hasClaudeKey() ? "claude-opus-4-8" : undefined);
+    (hasClaudeKey() ? "claude-opus-4-7" : undefined);
 
   if (canUseFreeDeepSeekPerplexityPipeline()) {
     return {

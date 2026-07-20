@@ -47,8 +47,8 @@ services:
         value: "https://api-cc.freemodel.dev"
       - key: CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
         value: "1"
-      # Prefer catalog id; server also accepts dotted claude-opus-4.8
+      # api-cc.freemodel.dev currently supports opus-4-7 (not 4.8 / 4-8)
       - key: CLAUDE_VISION_MODEL
-        value: "claude-opus-4-8"
+        value: "claude-opus-4-7"
       - key: ANTHROPIC_MODEL
-        value: "claude-opus-4-8"
+        value: "claude-opus-4-7"
