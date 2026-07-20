@@ -138,32 +138,45 @@ export async function analyzeContentServer(input: AnalysisInput): Promise<Analys
     }
   }
 
-  // 1b) Screenshot OCR / caption text fallback (vision failed — be honest)
+  // 1b) Screenshot text fallback when vision fails — NEVER feed protocol captions as "post content"
   if (requiresVision) {
-    const ocr = input.text?.trim() || "";
+    const rawText = input.text?.trim() || "";
+    // Mobile protocol notes (TYPE:/TASK:/imageBase64) must not become the analyzed claim
+    const isProtocolCaption =
+      /TYPE:\s*mobile_social|imageBase64|HELPER_OCR|PIXEL_VISION|TASK:\s*The JPEG|TASK:\s*Look at the ATTACHED/i.test(
+        rawText,
+      );
+    const usefulOcr =
+      !isProtocolCaption && rawText.length >= 40
+        ? rawText
+            .replace(/^TYPE:.*$/gim, "")
+            .replace(/^TASK:.*$/gim, "")
+            .replace(/^HELPER_OCR.*$/gim, "")
+            .trim()
+        : "";
+
     const textForAnalysis =
-      ocr.length >= 12
-        ? "IMPORTANT: Live image vision was unavailable. You only have imperfect OCR " +
-          "text from a social screenshot — NOT proof that the post lacked a photo. " +
-          "Do NOT claim 'no accompanying photo/image'. Frame as text-only limited check. " +
-          "Judge claims in the text only:\n\n" +
-          ocr.slice(0, 5500)
-        : "IMPORTANT: Live image vision was unavailable and almost no OCR text was " +
-          "extracted from a social screenshot. Do a cautious, limited assessment. " +
-          "Do NOT invent missing photos or claim OCR proved there was no image. " +
-          `Label: ${input.imageName || "screenshot"}.`;
+      usefulOcr.length >= 40
+        ? "Image vision failed. Below is imperfect on-screen text only (may be incomplete). " +
+          "Assess claims in that text. Do NOT discuss OCR systems, imageBase64, or API protocols. " +
+          "Do NOT claim the post lacked a photo:\n\n" +
+          usefulOcr.slice(0, 4000)
+        : "Image vision failed for a social media screenshot and no reliable post text was recovered. " +
+          "Return a cautious, generic needs_verification assessment for an unknown social post. " +
+          "Do NOT invent specific post content. Do NOT discuss OCR, imageBase64, or vision APIs. " +
+          "summary: state that the screenshot could not be read by the vision service.";
 
     const textInput: AnalysisInput = { type: "text", text: textForAnalysis };
     const failNote =
       visionErrors.length > 0
         ? ` Vision failed: ${visionErrors[visionErrors.length - 1].slice(0, 160)}`
-        : " No vision key or vision call failed.";
+        : " Vision unavailable.";
     const mark = (r: AnalysisResult, path: AnalysisEnginePath): AnalysisResult =>
       asPublicResult(
         {
           ...r,
-          summary: `${r.summary} (Text-only check — image vision unavailable.${failNote})`,
-          confidence: Math.min(r.confidence, 70),
+          summary: `${r.summary} (Limited: image vision unavailable.${failNote})`,
+          confidence: Math.min(r.confidence, 55),
         },
         r.provider === "claude" ? "claude" : path.startsWith("screenshot_ocr") ? "perplexity" : "mock",
         path,

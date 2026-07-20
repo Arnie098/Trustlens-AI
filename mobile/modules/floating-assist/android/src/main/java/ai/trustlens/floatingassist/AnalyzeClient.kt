@@ -28,6 +28,8 @@ data class QuickAnalyzeResult(
   val aiGenerated: Boolean,
   /** Visible text we fed the model (for the card “What we read”). */
   val excerpt: String,
+  /** Server engine_path: claude_vision | screenshot_ocr_* | … */
+  val enginePath: String = "",
 )
 
 /**
@@ -72,22 +74,15 @@ object AnalyzeClient {
       "Sending image (${jpeg.size / 1024} KB) to Claude via server…",
     )
 
-    // Minimal prompt — model must look at the attached image, not OCR noise.
-    val caption =
-      """
-      TYPE: mobile_social_screenshot
-      TASK: The JPEG image is attached as imageBase64. Analyze ONLY what you see in the pixels.
-      Describe the main photo, page name, headline, and caption. Ignore status bar and app chrome.
-      NEVER claim there is no photo if a photo is visible. Do not invent OCR-only framing.
-      """.trimIndent()
-
+    // No protocol essay in `text` — that was being analyzed as the "post" when vision failed.
+    // Image bytes go in imageBase64; server prompt tells Claude to read the pixels.
     val body =
       JSONObject()
         .put("type", "image")
         .put("imageName", "social-feed-screenshot.jpg")
         .put("imageMediaType", "image/jpeg")
         .put("imageBase64", b64)
-        .put("text", caption)
+        .put("text", "mobile_social_screenshot")
 
     status(
       AnalyzeLoadStage.VISION,
@@ -100,7 +95,16 @@ object AnalyzeClient {
         throw IllegalStateException(friendlyNetError("Analysis", e), e)
       }
     status(AnalyzeLoadStage.FINISH, "Building your result card…")
-    return result.copy(excerpt = "Claude vision · full screenshot")
+    // Use server path so we never claim Claude vision when OCR fallback ran
+    val pathLabel =
+      when {
+        result.enginePath.contains("claude") -> "Claude vision · screenshot"
+        result.enginePath.contains("perplexity_vision") -> "Perplexity vision · screenshot"
+        result.enginePath.contains("ocr") || result.enginePath.contains("cookie") ->
+          "Text fallback (vision blocked) · limited"
+        else -> result.enginePath.ifBlank { "screenshot analysis" }
+      }
+    return result.copy(excerpt = pathLabel)
   }
 
   private fun friendlyNetError(phase: String, e: Exception): String {
@@ -286,7 +290,11 @@ object AnalyzeClient {
         confRaw in 0.0..1.0 && confRaw != 0.0 -> (confRaw * 100).toInt()
         else -> confRaw.toInt()
       }
-    Log.i(TAG, "analyze ok score=$score")
+    val enginePath =
+      data.optString("engine_path", "").ifBlank {
+        root.optString("engine_path", "")
+      }
+    Log.i(TAG, "analyze ok score=$score path=$enginePath")
     return QuickAnalyzeResult(
       trustScore = score.coerceIn(0, 100),
       category = data.optString("category", "needs_verification"),
@@ -299,6 +307,7 @@ object AnalyzeClient {
       nextSteps = jsonStringList(data.optJSONArray("next_steps")).map { tighten(it, 120) }.take(2),
       aiGenerated = data.optBoolean("ai_generated_detected", false),
       excerpt = "",
+      enginePath = enginePath,
     )
   }
 
