@@ -34,13 +34,18 @@ const CLAUDE_CODE_BETAS =
   process.env.ANTHROPIC_BETA?.trim() ||
   "claude-code-20250219,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14";
 
-/** freemodel + Anthropic IDs that accept vision (models.dev/providers/freemodel). */
+/**
+ * Models currently advertised by api-cc.freemodel.dev (from 400 error body):
+ *   claude-opus-4-7 / claude-haiku-4-5-20251001 / claude-sonnet-4-6 / claude-sonnet-5
+ * Plus catalog extras that freemodel may still route.
+ */
 const FREEMODEL_VISION_MODELS = [
-  "claude-opus-4-8",
   "claude-opus-4-7",
-  "claude-opus-4-6",
   "claude-sonnet-4-6",
+  "claude-sonnet-5",
   "claude-haiku-4-5-20251001",
+  "claude-opus-4-8",
+  "claude-opus-4-6",
 ] as const;
 
 /** Extra aliases some proxies still accept. */
@@ -103,7 +108,8 @@ function candidateModels(): string[] {
 
 /** Only retry next model when the failure looks like a bad/unknown model id. */
 function isModelNotFoundError(message: string): boolean {
-  return /404|not[_\s-]?found|model[_ ]?not[_ ]?found|unknown model|invalid model|does not exist|unsupported model|no such model|model_not_available/i.test(
+  // freemodel (CN): 你请求的模型 "…" 暂不支持。可用模型：…
+  return /404|not[_\s-]?found|model[_ ]?not[_ ]?found|unknown model|invalid model|does not exist|unsupported model|no such model|model_not_available|not supported|暂不支持|可用模型|model is not|does not support/i.test(
     message,
   );
 }
