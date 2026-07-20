@@ -246,7 +246,7 @@ export function analyzeProviderInfo(): {
   const claudeBase =
     process.env.ANTHROPIC_BASE_URL?.trim() ||
     (/^(1|true|yes)$/i.test(process.env.ANTHROPIC_USE_FREEMODEL || "")
-      ? "https://cc.freemodel.dev"
+      ? "https://api-cc.freemodel.dev"
       : undefined);
   const claudeModel =
     process.env.CLAUDE_VISION_MODEL?.trim() ||

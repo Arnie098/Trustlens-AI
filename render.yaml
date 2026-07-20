@@ -42,14 +42,12 @@ services:
         sync: false
       - key: CLAUDE_API_KEY
         sync: false
-      # freemodel Anthropic-compatible API (server). Do NOT use api-cc.freemodel.dev —
-      # that host is Claude Code client-only and returns Access Denied for Render.
+      # freemodel Claude Code host (matches user Claude Code setup)
       - key: ANTHROPIC_BASE_URL
-        value: "https://cc.freemodel.dev"
+        value: "https://api-cc.freemodel.dev"
       - key: CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
         value: "1"
-      # freemodel catalog id (NOT dotted "4.8"). Server retries
-      # opus-4-7 → 4-6 → sonnet-4-6 → haiku if preferred fails.
+      # Prefer catalog id; server also accepts dotted claude-opus-4.8
       - key: CLAUDE_VISION_MODEL
         value: "claude-opus-4-8"
       - key: ANTHROPIC_MODEL
