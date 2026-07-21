@@ -200,6 +200,7 @@ CREATE TABLE IF NOT EXISTS public.verification_results (
   evidence JSONB NOT NULL DEFAULT '[]'::jsonb,
   next_steps JSONB NOT NULL DEFAULT '[]'::jsonb,
   replay_data JSONB,
+  provider TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

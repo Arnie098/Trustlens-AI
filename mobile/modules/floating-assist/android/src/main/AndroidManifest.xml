@@ -1,0 +1,40 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+  <application>
+    <service
+      android:name=".FloatingBubbleService"
+      android:exported="false"
+      android:foregroundServiceType="specialUse">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="floating_verify_assist" />
+    </service>
+
+    <!-- Android 14+: mediaProjection FGS must run before getMediaProjection() -->
+    <service
+      android:name=".MediaProjectionCaptureService"
+      android:exported="false"
+      android:foregroundServiceType="mediaProjection" />
+
+    <!--
+      Own task so starting capture never brings MainActivity / RN UI forward.
+      Translucent + noHistory: only the system MediaProjection dialog is visible.
+    -->
+    <activity
+      android:name=".ScreenCaptureActivity"
+      android:exported="false"
+      android:excludeFromRecents="true"
+      android:noHistory="true"
+      android:finishOnCloseSystemDialogs="true"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar"
+      android:taskAffinity="ai.trustlens.capture"
+      android:launchMode="singleInstance"
+      android:showWhenLocked="false"
+      android:turnScreenOn="false" />
+  </application>
+</manifest>

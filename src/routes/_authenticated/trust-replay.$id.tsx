@@ -6,7 +6,7 @@ import { AlertTriangle, ArrowLeft, Globe } from "lucide-react";
 import type { ReplayNode } from "@/lib/ai/types";
 
 export const Route = createFileRoute("/_authenticated/trust-replay/$id")({
-  head: () => ({ meta: [{ title: "TrustReplay — TrustLensAI" }] }),
+  head: () => ({ meta: [{ title: "TrustReplay — VeriSphere AI" }] }),
   component: TrustReplay,
 });
 

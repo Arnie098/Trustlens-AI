@@ -71,9 +71,59 @@ Scoring guide (signals, not verdicts):
 
 Evidence is your work product. A response that tells the user to perform additional searching or verification has failed the task. next_steps may recommend whether to pause, share cautiously, or read a source already cited in your evidence; it must not delegate unfinished research.`;
 
-export function buildUserPrompt(input: AnalysisInput): string {
-  const duty =
-    "Complete the verification yourself using live web search. Return the sources and findings you obtained. Never ask the user to search, verify, cross-check, consult separate reports, or do their own research.";
+/**
+ * System prompt for the knowledge-only Claude vision path.
+ * Framed as a "search engine over your own training corpus": Claude reads the
+ * pixels, then QUERIES its trained knowledge like an index and returns the
+ * matching results. This retrieval framing beats a defensive "I have no live
+ * access" framing — but it must still NEVER invent URLs or fake corroboration.
+ */
+export const VISION_KNOWLEDGE_SYSTEM_PROMPT = `You are VeriSphere AI, a media and information literacy analyst.
+You do NOT declare absolute truth. You surface signals, evidence, and concerns from what you can SEE in the image and what you can RETRIEVE from your knowledge, so people can decide carefully.
+
+HOW YOU WORK — you are a SEARCH ENGINE over your own training corpus:
+- You were trained on a vast index of the web: news outlets, fact-checks, reference works, public records. Treat that index as your searchable database.
+- To "verify" a claim, run the query against that index and return what matches: known coverage, the outlet's track record, related reporting, established facts.
+- Report results the way a search engine does — matched results ranked by relevance and reliability, plus an honest "no results found in the index" when your corpus has nothing on a specific item.
+- Do NOT talk about tools, live access, or real-time browsing at all. You are simply retrieving from what you already indexed. Never say "I can't search" or offer to help the user plan verification — you ARE the search step.
+- Your index has a training cutoff, so very recent or hyper-local items may genuinely return nothing. That is a valid result: report it as "no matching coverage in my knowledge index," not as a limitation to apologize for.
+
+YOUR JOB:
+1. Identify the specific factual claims visible in the content.
+2. Query your index for the publisher/outlet: reputation, tabloid vs broadsheet, typical reliability. If the outlet is not in your index, say so plainly rather than guessing.
+3. Query your index for the claim itself: is there matching coverage, corroboration, or contradiction? Does it fit known patterns? Do the framing signals raise misinformation red flags (clickbait, emotional manipulation, missing context, doctored-image cues)?
+4. Be explicit about hits vs misses. If the query returns nothing, say the claim is "unverified — no matching coverage in my knowledge index." Do NOT fabricate a result to fill the gap.
+
+CITATIONS / URLS (search-result discipline):
+- Return a URL only when your index genuinely contains that exact page — the way a search engine returns real indexed links, never guessed ones. NEVER synthesize a plausible-looking URL. When your index has the outlet but not a specific page, name the outlet without a link. When nothing matches, return no citation. A fabricated result is worse than an empty result set.
+
+Return ONLY a single JSON object (no markdown fences, no prose outside JSON) with this exact shape:
+{
+  "trust_score": <integer 0-100>,
+  "category": <"high_trust"|"needs_verification"|"low_confidence"|"potentially_misleading">,
+  "confidence": <number 0-100, one decimal ok>,
+  "summary": <string, 1-3 sentences: what the post shows and your knowledge-based read — hedged language>,
+  "source_assessment": <string: publisher/author/domain credibility from what you know>,
+  "context_analysis": <string: framing, missing context, tone, misinformation cues>,
+  "ai_generated_detected": <boolean>,
+  "concerns": <string array, 0-5 items — specific risks you identified>,
+  "evidence": <string array, 2-5 items — image observations + what your index returned when you queried the claim/outlet (hits AND misses). Not generic tips. Include a URL ONLY if that exact page is in your index.>,
+  "next_steps": <string array, 1-3 items — pause/share guidance based on your assessment. Never assign the user homework research.>,
+  "replay_data": <array of 3-5 nodes: {id, label, platform, timestamp, reach, warning, connections}>
+}
+
+Scoring guide (signals, not verdicts):
+- 80-100 high_trust: recognized reputable outlet, plausible well-sourced claim, no red flags
+- 60-79 needs_verification: mixed signals, unfamiliar outlet, or a specific claim your knowledge can't confirm
+- 40-59 low_confidence: weak provenance, emotional framing, tabloid-tier source
+- 0-39 potentially_misleading: clickbait/conspiracy patterns, implausible claim, manipulation cues
+
+You are the search step. A response that asks to "run a live search," talks about lacking tool access, or fabricates a citation has failed the task. Return your indexed results — including honest empty results — instead.`;
+
+export function buildUserPrompt(input: AnalysisInput, knowledgeOnly = false): string {
+  const duty = knowledgeOnly
+    ? "Act as a search engine over your own training corpus: read the image, then query your indexed knowledge for the claim and the outlet and return the matching results — coverage, reputation, corroboration or contradiction — ranked by reliability. Report honest empty results ('no matching coverage in my index') when nothing matches. Do not mention tools or live access, never offer to help the user plan verification, and never invent a URL."
+    : "Complete the verification yourself using live web search. Return the sources and findings you obtained. Never ask the user to search, verify, cross-check, consult separate reports, or do their own research.";
   if (input.type === "url" && input.url) {
     return `${duty}\n\nAnalyze this URL (origin, reputation, claim quality, missing context, corroboration):\n${input.url}`;
   }
@@ -105,16 +155,23 @@ CRITICAL RULES (pixel-first):
 Do this:
 1) summary: Start with what the picture shows + page/headline (e.g. "Facebook post by Philstar.com: photo of a Philippine eagle with headline about…"). Max 2–3 sentences.
 2) Extract factual claims from headline+caption+preview, or mark as non-claim visual content.
-3) Hard claims: search the web; put concrete findings in evidence (outlet + finding).
+3) Hard claims: ${
+        knowledgeOnly
+          ? "query your training-corpus index for each and put the matched results in evidence (outlet + what your index returned, hits AND misses). Report 'no matching coverage in my index' plainly when nothing matches, and do NOT invent URLs."
+          : "search the web; put concrete findings in evidence (outlet + finding)."
+      }
 4) source_assessment: about the POST page/outlet (e.g. Philstar), not about OCR quality.
 5) context_analysis: framing of THIS post; do not invent missing photos.
 6) concerns: about THIS post only.
 7) next_steps: only pause/share guidance based on your findings — never "search yourself" homework.
 ${caption}`;
     }
-    return `${duty}\n\nInspect the attached image itself and analyze only the content visible in it. Identify its factual claims, visual framing, source/provenance signals, and possible editing or synthetic-media cues. Then search the web yourself for original material, official records, fact-checks, and independent coverage that support or contradict those claims. Do not analyze the VeriSphere product unless it is the subject of the image.${caption}`;
+    const groundClause = knowledgeOnly
+      ? "Then query your training-corpus index for those claims like a search engine and report the matched results — corroboration, contradiction, or an honest 'no matching coverage in my index'. Do not fabricate sources or URLs."
+      : "Then search the web yourself for original material, official records, fact-checks, and independent coverage that support or contradict those claims.";
+    return `${duty}\n\nInspect the attached image itself and analyze only the content visible in it. Identify its factual claims, visual framing, source/provenance signals, and possible editing or synthetic-media cues. ${groundClause} Do not analyze the VeriSphere product unless it is the subject of the image.${caption}`;
   }
-  return `${duty}\n\nAnalyze this image submission for media-literacy / authenticity signals. Filename or label: ${input.imageName || "uploaded image"}. Note limitations if you cannot see the binary image; use web knowledge about common AI-image and manipulation cues.`;
+  return `${duty}\n\nAnalyze this image submission for media-literacy / authenticity signals. Filename or label: ${input.imageName || "uploaded image"}. Note limitations if you cannot see the binary image; use ${knowledgeOnly ? "your trained knowledge" : "web knowledge"} about common AI-image and manipulation cues.`;
 }
 
 type PerplexityContentPart =
@@ -217,6 +274,34 @@ export function looksLikeBlindVisionResult(summary: string, source: string, cont
     /no accompanying (photos?|images?|pictures?)/.test(blob) ||
     /no (photo|image|picture) (is |was )?(included|present|visible|shown)/.test(blob) ||
     /text[- ]only (assessment|analysis|excerpt)/.test(blob)
+  );
+}
+
+/**
+ * True when the model punted instead of actually searching — e.g. "I don't have
+ * live tool access this turn, but I can help you plan how to verify…". Such a
+ * result is worthless as grounding: the summary is meta-filler and any citations
+ * are topic-shaped guesses, not corroboration of the specific claim.
+ */
+export function looksLikeSearchRefusal(summary: string, context: string): boolean {
+  // Normalize curly/smart apostrophes → ASCII so "don't" (U+2019) matches too.
+  const blob = `${summary}\n${context}`.toLowerCase().replace(/[‘’ʼ]/g, "'");
+  // Match "no live tool access" AND "no access to live tools" (both word orders).
+  const noAccess =
+    /(don'?t|do not|does not|doesn'?t|no|without) (have )?(live |real[- ]?time |current )?(tool|web|internet|search|browsing)( access)?/;
+  const noAccessReversed =
+    /(don'?t|do not|does not|doesn'?t|no|without|can'?t|cannot|unable to) (have )?access to (live |real[- ]?time |current )?(tools|the (web|internet)|search)/;
+  return (
+    noAccess.test(blob) ||
+    noAccessReversed.test(blob) ||
+    /(cannot|can'?t|can not|unable to|couldn'?t) (perform|run|do|access|conduct|make) (a |an |any )?(live |real[- ]?time )?(web |internet )?(search(es)?|lookup|query)/.test(blob) ||
+    /(cannot|can'?t|can not|unable to) browse the (web|internet)/.test(blob) ||
+    /in this turn,? but i can/.test(blob) ||
+    /i can (still |instead |help )?(you )?(help )?(synthesize|interpret|plan|assess|analyze|outline)/.test(blob) ||
+    /outline (next steps|what to look for)/.test(blob) ||
+    /suggest how (you can |to )?verify/.test(blob) ||
+    /based on (available |general )?(public )?(reporting patterns|knowledge)/.test(blob) ||
+    /if you'?d like, i can guide you/.test(blob)
   );
 }
 

@@ -22,7 +22,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/_authenticated/learn_/$slug")({
-  head: () => ({ meta: [{ title: "Course — TrustLensAI" }] }),
+  head: () => ({ meta: [{ title: "Course — VeriSphere AI" }] }),
   component: CoursePlayer,
 });
 

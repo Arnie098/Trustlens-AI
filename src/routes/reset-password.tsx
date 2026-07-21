@@ -8,7 +8,7 @@ import { supabase } from "@/lib/db";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/reset-password")({
-  head: () => ({ meta: [{ title: "Set new password — TrustLensAI" }] }),
+  head: () => ({ meta: [{ title: "Set new password — VeriSphere AI" }] }),
   component: ResetPassword,
 });
 

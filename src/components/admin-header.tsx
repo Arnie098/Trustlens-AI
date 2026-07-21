@@ -23,7 +23,7 @@ export function AdminHeader() {
         <BrandLogo
           to="/admin"
           inverted
-          title="TrustLens Admin"
+          title="VeriSphere AI Admin"
           subtitle="Governance console"
           size="md"
         />

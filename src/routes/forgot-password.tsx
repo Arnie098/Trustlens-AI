@@ -8,7 +8,7 @@ import { supabase } from "@/lib/db";
 import { z } from "zod";
 
 export const Route = createFileRoute("/forgot-password")({
-  head: () => ({ meta: [{ title: "Forgot password — TrustLensAI" }] }),
+  head: () => ({ meta: [{ title: "Forgot password — VeriSphere AI" }] }),
   component: ForgotPassword,
 });
 

@@ -17,7 +17,7 @@ const ICONS: Record<string, LucideIcon> = {
 };
 
 export const Route = createFileRoute("/_authenticated/achievements")({
-  head: () => ({ meta: [{ title: "Achievements — TrustLensAI" }] }),
+  head: () => ({ meta: [{ title: "Achievements — VeriSphere AI" }] }),
   component: Achievements,
 });
 

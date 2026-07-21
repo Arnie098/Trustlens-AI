@@ -27,6 +27,14 @@ data/*.db-*
 data/perplexity-cookies.txt
 data/_last_analyze.json
 
+# Local OCR / verification test helpers & dumps (do not commit)
+scripts/test-ocrspace.mjs
+scripts/test-ocrspace-server.mjs
+scripts/test-mobile-ocr-e2e.mjs
+scripts/check-recent-verifications.mjs
+scripts/reocr-recent-uploads.mjs
+data/ocr-debug/
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
@@ -42,4 +50,21 @@ data/_last_analyze.json
 *.sln
 *.sw?
 
+# Mobile (Capacitor)
+# www/ is a generated web build; the native android/ SOURCE is committed for
+# reproducible builds, but its local build artifacts are ignored here + in
+# mobile/.gitignore.
+mobile/www/
+mobile/node_modules/
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/capacitor-cordova-android-plugins/
+mobile/android/app/src/main/assets/public/
+mobile/android/app/src/main/assets/capacitor.config.json
+mobile/android/local.properties
+mobile/*.apk
+mobile/*.aab
+
 data/uploads/
+

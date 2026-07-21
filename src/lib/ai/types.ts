@@ -22,6 +22,7 @@ export interface AnalysisInput {
 export type AnalysisEnginePath =
   | "perplexity_vision"
   | "claude_vision"
+  | "claude_vision_perplexity"
   | "screenshot_ocr_free"
   | "screenshot_ocr_cookie"
   | "screenshot_ocr_deepseek"

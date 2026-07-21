@@ -56,11 +56,11 @@ export async function mockAnalyze(input: AnalysisInput): Promise<AnalysisResult>
     "Content structure follows editorial standards",
   ];
   const stepsPool = [
-    "Cross-check the claim with two independent, credible sources",
-    "Search the exact quote or claim to see original context",
-    "Use a reverse image search if the piece includes visuals",
-    "Look for the author's credentials or publisher's About page",
-    "Take a lesson on spotting misleading headlines",
+    "Review the evidence and concerns above before sharing",
+    "Open any linked citations and check date, author, and full context",
+    "Pause before resharing if the summary still feels incomplete",
+    "Compare the claim wording to what the original source actually said",
+    "Take a VeriSphere lesson on spotting misleading headlines",
   ];
 
   const pick = (arr: string[], n: number) =>
@@ -68,13 +68,13 @@ export async function mockAnalyze(input: AnalysisInput): Promise<AnalysisResult>
 
   const summaries: Record<TrustCategory, string> = {
     high_trust:
-      "The analysis suggests this content shows several markers of credibility. Independent verification is still recommended before sharing.",
+      "The analysis suggests this content shows several markers of credibility based on available signals. Review the evidence below before sharing.",
     needs_verification:
-      "The analysis suggests mixed signals. Some elements look credible, but potential indicators of concern were also found. Further verification is recommended.",
+      "The analysis suggests mixed signals. Some elements look credible, but concerns were also found — see evidence and concerns below.",
     low_confidence:
-      "The analysis suggests low confidence. Several potential indicators of misleading framing were detected. Pause before sharing and verify independently.",
+      "The analysis suggests low confidence. Several indicators of weak or misleading framing were detected. Pause before sharing and review the evidence list.",
     potentially_misleading:
-      "The analysis suggests this content may be misleading. Multiple potential indicators of unreliable framing were detected. We strongly recommend verifying with independent sources.",
+      "The analysis suggests this content may be misleading. Multiple indicators of unreliable framing were detected — see evidence and concerns below.",
   };
 
   let originLabel = "Original source";
@@ -139,9 +139,9 @@ export async function mockAnalyze(input: AnalysisInput): Promise<AnalysisResult>
     summary: summaries[category],
     source_assessment: trusted
       ? "Source appears in publicly maintained lists of established outlets."
-      : "Source credibility could not be strongly established. Further checks are recommended.",
+      : "Source credibility could not be strongly established from available signals.",
     context_analysis:
-      "The content was reviewed for tone, framing, presence of citations, and known misinformation patterns. This is an automated assessment and may be incomplete.",
+      "The content was reviewed for tone, framing, presence of citations, and known misinformation patterns. This automated assessment may be incomplete.",
     ai_generated_detected,
     concerns: score < 70 ? pick(concernsPool, 3) : pick(concernsPool, 1),
     evidence: score > 40 ? pick(evidencePool, 3) : pick(evidencePool, 1),

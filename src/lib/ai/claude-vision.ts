@@ -15,14 +15,17 @@ import { randomUUID } from "node:crypto";
 import {
   extractJson,
   looksLikeBlindVisionResult,
+  looksLikeSearchRefusal,
   normalizeResult,
   resolveVisionDataUri,
-  SYSTEM_PROMPT,
+  VISION_KNOWLEDGE_SYSTEM_PROMPT,
   buildUserPrompt,
 } from "./perplexity";
 import type { AnalysisInput, AnalysisResult } from "./types";
 
 const ANTHROPIC_VERSION = "2023-06-01";
+/** Per-upstream-call abort so a hung freemodel request fails over instead of stalling. */
+const CALL_TIMEOUT_MS = 100_000;
 const DEFAULT_OFFICIAL_BASE = "https://api.anthropic.com";
 /** freemodel Claude Code host (hackathon default). */
 const DEFAULT_FREEMODEL_BASE = "https://api-cc.freemodel.dev";
@@ -35,23 +38,15 @@ const CLAUDE_CODE_BETAS =
   "claude-code-20250219,interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14";
 
 /**
- * Models currently advertised by api-cc.freemodel.dev (from 400 error body):
- *   claude-opus-4-7 / claude-haiku-4-5-20251001 / claude-sonnet-4-6 / claude-sonnet-5
- * Plus catalog extras that freemodel may still route.
+ * Models advertised by api-cc.freemodel.dev (confirmed from its 400 error body).
+ * Ordered strongest-first. Anything outside this set returns 暂不支持 / not_found,
+ * so we do not carry legacy aliases or unlisted catalog guesses.
  */
 const FREEMODEL_VISION_MODELS = [
   "claude-opus-4-7",
   "claude-sonnet-4-6",
   "claude-sonnet-5",
   "claude-haiku-4-5-20251001",
-  "claude-opus-4-8",
-  "claude-opus-4-6",
-] as const;
-
-/** Extra aliases some proxies still accept. */
-const LEGACY_VISION_ALIASES = [
-  "claude-opus-4.8",
-  "claude-sonnet-4-20250514",
 ] as const;
 
 export function hasClaudeKey(): boolean {
@@ -99,7 +94,7 @@ function candidateModels(): string[] {
     process.env.CLAUDE_VISION_MODEL?.trim() ||
     process.env.ANTHROPIC_MODEL?.trim() ||
     "";
-  const defaults = [...FREEMODEL_VISION_MODELS, ...LEGACY_VISION_ALIASES];
+  const defaults = [...FREEMODEL_VISION_MODELS];
   const list = preferred
     ? [preferred, ...defaults.filter((m) => m !== preferred)]
     : defaults;
@@ -209,8 +204,9 @@ function buildClaudeRequestHeaders(
 }
 
 function headerModesFor(endpoint: string): HeaderMode[] {
-  // Try simple first — "third-party client rejected" often means fake CC fingerprint failed.
-  if (isFreemodelEndpoint(endpoint)) return ["simple", "claude_code"];
+  // claude_code first: api-cc rejects simple headers every time in practice, so
+  // leading with simple burned a guaranteed-failed round trip on each request.
+  if (isFreemodelEndpoint(endpoint)) return ["claude_code", "simple"];
   return ["simple"];
 }
 
@@ -230,7 +226,7 @@ async function callClaudeOnce(
   const body: Record<string, unknown> = {
     model,
     max_tokens: 2048,
-    system: SYSTEM_PROMPT,
+    system: VISION_KNOWLEDGE_SYSTEM_PROMPT,
     messages: [
       {
         role: "user",
@@ -258,11 +254,26 @@ async function callClaudeOnce(
     body.temperature = 0.2;
   }
 
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+  // Successful freemodel vision calls run 37–58s; a hung upstream otherwise
+  // stalls until the mobile client's 240s read timeout. Abort and fail over.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), CALL_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+  } catch (e) {
+    if (ctrl.signal.aborted) {
+      throw new Error(`Claude call timed out after ${CALL_TIMEOUT_MS / 1000}s model=${model}`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 
   const raw = await res.text();
   let data: ReturnType<typeof JSON.parse>;
@@ -345,7 +356,7 @@ export async function claudeVisionAnalyze(input: AnalysisInput): Promise<Analysi
     imageUrl: input.imageUrl?.trim() || "inline://screenshot",
     imageName: input.imageName || "social-feed-screenshot.jpg",
   };
-  const prompt = buildUserPrompt(promptInput);
+  const prompt = buildUserPrompt(promptInput, true);
   const primaryEndpoint = claudeMessagesUrl();
   // If api-cc rejects third-party clients, also try cc.freemodel.dev
   const endpoints = Array.from(
@@ -455,20 +466,20 @@ export async function claudeVisionAnalyze(input: AnalysisInput): Promise<Analysi
       console.info(`[claude-vision] success model=${used}`);
       let result = normalizeResult(parsed, input, []);
 
-      if (
-        looksLikeBlindVisionResult(
-          result.summary,
-          result.source_assessment,
-          result.context_analysis,
-        )
-      ) {
-        // OCR-biased / blind answers — one forced re-look at the image
-        console.warn(`[claude-vision] blind/OCR-framed answer from ${used}; re-prompting`);
+      const isBad = (r: typeof result) =>
+        looksLikeBlindVisionResult(r.summary, r.source_assessment, r.context_analysis) ||
+        looksLikeSearchRefusal(r.summary, r.context_analysis);
+
+      if (isBad(result)) {
+        // Blind/OCR-framed OR a "can't search" punt — one forced re-look at the image
+        console.warn(`[claude-vision] blind or search-refusal answer from ${used}; re-prompting`);
         try {
           const strict =
             prompt +
             "\n\nREDO: You MUST open with what the PHOTO shows (subject, page name, headline). " +
-            "Do NOT say OCR-derived, no accompanying photo, or text-only. Return JSON only.";
+            "Do NOT say OCR-derived, no accompanying photo, or text-only. " +
+            "Do NOT say you can't search or offer to help the user verify — assess from your own knowledge. " +
+            "Return JSON only.";
           ({ text, model: used } = await callClaudeOnce(
             endpoint,
             apiKey,
@@ -482,16 +493,10 @@ export async function claudeVisionAnalyze(input: AnalysisInput): Promise<Analysi
         } catch (reErr) {
           console.warn(`[claude-vision] re-prompt failed:`, reErr);
         }
-        if (
-          looksLikeBlindVisionResult(
-            result.summary,
-            result.source_assessment,
-            result.context_analysis,
-          )
-        ) {
-          // Still blind — try next model rather than ship a broken card
+        if (isBad(result)) {
+          // Still bad — try next model rather than ship a broken card
           throw new Error(
-            `Blind/OCR-framed vision result model=${used}: ${result.summary.slice(0, 120)}`,
+            `Blind/refusal vision result model=${used}: ${result.summary.slice(0, 120)}`,
           );
         }
       }

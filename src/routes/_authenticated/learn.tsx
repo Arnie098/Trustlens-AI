@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Award, BookOpen, CheckCircle2, Clock, GraduationCap, Layers, Play } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/learn")({
-  head: () => ({ meta: [{ title: "Courses — TrustLensAI" }] }),
+  head: () => ({ meta: [{ title: "Courses — VeriSphere AI" }] }),
   component: CourseCatalog,
 });
 

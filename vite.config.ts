@@ -23,6 +23,16 @@ function localApiPlugin(): Plugin {
         const urlPath = (req.url ?? "").split("?")[0];
 
         try {
+          if (urlPath === "/api/analyze/vision") {
+            const request = await nodeToFetchRequest(req);
+            const { handleAnalyzeVisionApi } = (await server.ssrLoadModule(
+              "/src/lib/ai/analyze-vision-handler",
+            )) as typeof import("./src/lib/ai/analyze-vision-handler");
+            const response = await handleAnalyzeVisionApi(request);
+            await writeFetchResponse(res, response);
+            return;
+          }
+
           if (urlPath === "/api/analyze" || urlPath.startsWith("/api/analyze/")) {
             const request = await nodeToFetchRequest(req);
             // ssrLoadModule (not a literal import()) so esbuild doesn't bundle this
@@ -35,13 +45,32 @@ function localApiPlugin(): Plugin {
             return;
           }
 
+          if (urlPath === "/api/ocr" || urlPath.startsWith("/api/ocr/")) {
+            const request = await nodeToFetchRequest(req);
+            const { handleOcrApi } = (await server.ssrLoadModule(
+              "/src/lib/ocr/ocr-handler",
+            )) as typeof import("./src/lib/ocr/ocr-handler");
+            const response = await handleOcrApi(request);
+            await writeFetchResponse(res, response);
+            return;
+          }
+
+          if (urlPath === "/api/uploads" || urlPath.startsWith("/api/uploads/")) {
+            const request = await nodeToFetchRequest(req);
+            const { handleUploadApi } = (await server.ssrLoadModule(
+              "/src/lib/uploads/upload-handler",
+            )) as typeof import("./src/lib/uploads/upload-handler");
+            const response = await handleUploadApi(request);
+            await writeFetchResponse(res, response);
+            return;
+          }
+
           if (!urlPath.startsWith("/api/local")) {
             next();
             return;
           }
 
-          const provider =
-            process.env.VITE_DB_PROVIDER || process.env.DB_PROVIDER || "sqlite";
+          const provider = process.env.VITE_DB_PROVIDER || process.env.DB_PROVIDER || "sqlite";
           if (provider === "supabase") {
             next();
             return;
@@ -99,7 +128,11 @@ async function writeFetchResponse(res: ServerResponse, response: Response): Prom
 
 // Load all .env keys into process.env so server APIs can read PERPLEXITY_API_KEY
 // (Vite only exposes VITE_* to the browser by design).
-const env = loadEnv(process.env.NODE_ENV === "production" ? "production" : "development", process.cwd(), "");
+const env = loadEnv(
+  process.env.NODE_ENV === "production" ? "production" : "development",
+  process.cwd(),
+  "",
+);
 for (const [key, value] of Object.entries(env)) {
   if (process.env[key] === undefined) process.env[key] = value;
 }
@@ -111,18 +144,44 @@ const dbProvider =
 const useSupabase = dbProvider === "supabase";
 const sqliteAlias = useSupabase ? { "node:sqlite": SQLITE_STUB } : {};
 
+// Mobile (Capacitor) needs a STATIC index.html to bundle into mobile/www — the
+// default SSR/Nitro build only emits assets + a server entry. When MOBILE_SPA=1
+// (set by scripts/sync-mobile.mjs), enable TanStack Start SPA mode so the shell
+// is prerendered to a static index.html and the app runs fully client-side inside
+// the WebView.
+//
+// SPA prerender boots TanStack Start's own preview server, which loads the server
+// build from dist/server/server.js. Nitro's node-server preset repackages output
+// to .output/ instead, so prerender + Nitro do not compose. For the mobile build
+// we therefore DISABLE Nitro (nitro: false) — we only need static client assets +
+// the prerendered shell, not a deployable server. The Render/production SSR path
+// never sets MOBILE_SPA, so it keeps the node-server preset untouched.
+const mobileSpa = process.env.MOBILE_SPA === "1";
+const tanstackStartOptions: Record<string, unknown> = {
+  // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
+  server: { entry: "server" },
+  ...(mobileSpa
+    ? {
+        spa: {
+          enabled: true,
+          prerender: { enabled: true, crawlLinks: false },
+        },
+      }
+    : {}),
+};
+
+const nitroConfig = mobileSpa
+  ? false
+  : {
+      // Render (and local Node hosting) need a Node listener, not Cloudflare Workers.
+      // Override Lovable's defaultPreset of cloudflare-module.
+      preset: "node-server",
+      alias: sqliteAlias,
+    };
+
 export default defineLovableConfig({
-  // Render (and local Node hosting) need a Node listener, not Cloudflare Workers.
-  // Override Lovable's defaultPreset of cloudflare-module.
-  nitro: {
-    preset: "node-server",
-    alias: sqliteAlias,
-  },
-  tanstackStart: {
-    // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
-    // nitro/vite builds from this
-    server: { entry: "server" },
-  },
+  nitro: nitroConfig,
+  tanstackStart: tanstackStartOptions,
   vite: {
     plugins: [localApiPlugin()],
     resolve: {

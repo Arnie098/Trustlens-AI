@@ -54,7 +54,7 @@ export function HeroLensDemo() {
       <div className="prism-layer" aria-hidden="true" />
       <div className="glass cursor-lens relative rounded-2xl p-6">
         <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-muted-foreground">
-          <span>Live TrustLens</span>
+          <span>Live VeriSphere</span>
           <span className="inline-flex items-center gap-1.5">
             <span className="h-1.5 w-1.5 rounded-full bg-teal" />
             {running ? "Analyzing" : "Ready"}
@@ -83,7 +83,7 @@ export function HeroLensDemo() {
         )}
       </div>
       <figcaption className="mt-4 px-2 text-xs text-muted-foreground">
-        Live analysis of a text claim. TrustLensAI supports critical thinking; it does not replace
+        Live analysis of a text claim. VeriSphere AI supports critical thinking; it does not replace
         independent fact-checking.
       </figcaption>
     </figure>

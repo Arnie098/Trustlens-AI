@@ -18,8 +18,8 @@ export const Route = createFileRoute("/auth")({
   validateSearch: (s) => searchSchema.parse(s),
   head: () => ({
     meta: [
-      { title: "Sign in — TrustLensAI" },
-      { name: "description", content: "Sign in or create a TrustLensAI account." },
+      { title: "Sign in — VeriSphere AI" },
+      { name: "description", content: "Sign in or create a VeriSphere AI account." },
     ],
   }),
   component: AuthPage,
@@ -94,7 +94,7 @@ function AuthPage() {
           </CardContent>
         </Card>
         <p className="mt-6 text-center text-xs text-navy-foreground/80">
-          TrustLensAI supports critical thinking and does not replace independent fact-checking.
+          VeriSphere AI supports critical thinking and does not replace independent fact-checking.
         </p>
       </div>
     </div>

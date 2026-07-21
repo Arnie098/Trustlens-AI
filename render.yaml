@@ -6,7 +6,7 @@
 
 services:
   - type: web
-    name: trustlens-ai
+    name: VeriSphere-ai
     runtime: node
     plan: free
     # Free web services are most reliable in oregon; change later if you prefer.

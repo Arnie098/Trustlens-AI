@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TrustGauge } from "@/components/trust-gauge";
+import { CompactTrustResult } from "@/components/compact-trust-result";
 import { db } from "@/lib/db";
 import { trustLabel } from "@/lib/ai/mock-analyze";
 import {
@@ -17,10 +18,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { parseEvidenceItems } from "@/lib/evidence";
-import {
-  sanitizeAnalysisProse,
-  sanitizeDisplayList,
-} from "@/lib/ai/sanitize-text";
+import { sanitizeAnalysisProse, sanitizeDisplayList } from "@/lib/ai/sanitize-text";
 import {
   Dialog,
   DialogContent,
@@ -33,7 +31,7 @@ import {
 // Flat route: /verify/$id is a sibling of /verify (not nested under it).
 // Nested verify.$id never rendered because verify.tsx had no <Outlet />.
 export const Route = createFileRoute("/_authenticated/verify_/$id")({
-  head: () => ({ meta: [{ title: "Verification results — TrustLensAI" }] }),
+  head: () => ({ meta: [{ title: "Verification results — VeriSphere AI" }] }),
   component: ResultsPage,
 });
 
@@ -113,11 +111,21 @@ function ResultsPage() {
   const req = data.verification_requests;
   const concerns = sanitizeDisplayList(data.concerns);
   const nextSteps = sanitizeDisplayList(data.next_steps);
+  const summaryText = sanitizeAnalysisProse(data.summary, "summary");
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
+      {/* Mobile sticky compact summary (Task 13) — full gauge remains in sidebar on lg+ */}
+      <div className="sticky top-[var(--site-header-offset,4rem)] z-20 -mx-1 mb-6 lg:hidden">
+        <CompactTrustResult
+          trustScore={data.trust_score}
+          category={data.category}
+          summary={summaryText}
+        />
+      </div>
+
       <div className="grid gap-8 lg:grid-cols-[300px_1fr]">
-        <div className="lg:sticky lg:top-[var(--site-header-offset)] lg:self-start">
+        <div className="hidden lg:sticky lg:top-[var(--site-header-offset)] lg:block lg:self-start">
           <div className="prism-sheen relative animate-scale-in">
             <div className="prism-layer" aria-hidden="true" />
             <div className="glass flex flex-col items-center rounded-2xl p-6 shadow-glow">
@@ -138,17 +146,13 @@ function ResultsPage() {
           <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
             {req?.type === "url" ? "URL" : req?.type === "text" ? "Text" : "Image"}
           </div>
-          <ResultTitle
-            text={req?.input_url ?? req?.input_text ?? "Image submission"}
-          />
+          <ResultTitle text={req?.input_url ?? req?.input_text ?? "Image submission"} />
 
           <div className="glass mt-5 rounded-2xl p-5">
             <div className="flex items-center gap-2 text-sm font-semibold">
               <Sparkles className="h-4 w-4 text-teal" /> Assessment summary
             </div>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              {sanitizeAnalysisProse(data.summary, "summary")}
-            </p>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{summaryText}</p>
           </div>
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -170,12 +174,7 @@ function ResultsPage() {
           </div>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <List
-              icon={AlertTriangle}
-              tone="warn"
-              title="Potential concerns"
-              items={concerns}
-            />
+            <List icon={AlertTriangle} tone="warn" title="Potential concerns" items={concerns} />
             <EvidenceList items={data.evidence ?? []} />
           </div>
 
@@ -219,7 +218,7 @@ function ResultsPage() {
           </div>
 
           <p className="mt-6 rounded-xl border border-border bg-background/40 p-4 text-xs text-muted-foreground">
-            AI analysis may be incomplete, inaccurate, or biased. TrustLensAI supports critical
+            AI analysis may be incomplete, inaccurate, or biased. VeriSphere AI supports critical
             thinking and does not replace independent fact-checking or human judgment.
           </p>
         </div>

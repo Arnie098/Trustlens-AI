@@ -1,0 +1,11 @@
+﻿# dependencies
+node_modules/
+
+# Android build outputs
+android/build/
+android/.cxx/
+**/build/
+*.dex
+*.class
+*.apk
+*.aab

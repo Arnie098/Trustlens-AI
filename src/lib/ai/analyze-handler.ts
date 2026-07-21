@@ -97,7 +97,7 @@ export async function handleAnalyzeApi(request: Request): Promise<Response> {
         "freemodel api-cc rejected the vision call. Check ANTHROPIC_API_KEY for https://api-cc.freemodel.dev.";
       fail_path = "claude_api_cc_rejected";
     } else if (/Claude API \d+|Claude vision failed|Claude non-JSON/i.test(message)) {
-      safe = "Claude vision is temporarily unavailable. Please try again.";
+      safe = "The Model is temporarily unavailable. Please try again.";
       fail_path = "claude_vision";
     } else if (/public https imageUrl|missing public imageUrl|imageUrl from POST/i.test(message)) {
       safe = "Screenshot upload did not return a public image URL. Try Analyze again.";

@@ -78,22 +78,22 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "TrustLensAI — Think Before You Trust" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
+      { title: "VeriSphere AI — Think Before You Trust" },
       {
         name: "description",
         content:
           "Verify online content, understand why it may be trustworthy or misleading, and develop smarter sharing habits.",
       },
-      { name: "author", content: "TrustLensAI" },
-      { property: "og:title", content: "TrustLensAI — Think Before You Trust" },
+      { name: "author", content: "VeriSphere AI" },
+      { property: "og:title", content: "VeriSphere AI — Think Before You Trust" },
       {
         property: "og:description",
         content: "Verify online content, understand why it may be trustworthy or misleading, and develop smarter sharing habits.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "TrustLensAI — Think Before You Trust" },
+      { name: "twitter:title", content: "VeriSphere AI — Think Before You Trust" },
       { name: "twitter:description", content: "Verify online content, understand why it may be trustworthy or misleading, and develop smarter sharing habits." },
       { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/7203f81d-1209-4889-b05d-4b708259086d/id-preview-a2aa33ec--d2649667-58af-4413-927d-95608e0ca8eb.lovable.app-1784253511616.png" },
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/7203f81d-1209-4889-b05d-4b708259086d/id-preview-a2aa33ec--d2649667-58af-4413-927d-95608e0ca8eb.lovable.app-1784253511616.png" },
