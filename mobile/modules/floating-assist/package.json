@@ -1,7 +1,7 @@
 {
   "name": "trustlens-floating-assist",
   "version": "1.0.0",
-  "description": "TrustLens floating verify bubble for Android",
+  "description": "VeriSphere floating verify bubble for Android",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {},

@@ -82,7 +82,7 @@ export default function HomeScreen() {
                 style={styles.brandLogo}
                 resizeMode="contain"
               />
-              <Text style={styles.brandWord}>TrustLensAI</Text>
+              <Text style={styles.brandWord}>VeriSphere AI</Text>
             </View>
             <SectionLabel>Media literacy, quietly</SectionLabel>
             <Title>Home</Title>

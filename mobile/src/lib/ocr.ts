@@ -2,7 +2,7 @@
  * Text extraction from still images.
  *
  * Priority:
- *  1. OCR.space (via TrustLens /api/ocr or EXPO_PUBLIC_OCR_SPACE_API_KEY)
+ *  1. OCR.space (via VeriSphere /api/ocr or EXPO_PUBLIC_OCR_SPACE_API_KEY)
  *  2. UNESCO OCR microservice (EXPO_PUBLIC_OCR_URL) — optional local Tesseract
  *  3. Optional on-device ML Kit / expo-text-recognition
  *  4. none → user types caption manually

@@ -90,7 +90,7 @@ export default function RootLayout() {
           <View style={styles.root} onLayout={onRootLayout}>
             {/* Visible boot chrome — navy alone looks like a stuck system splash */}
             <View style={styles.bootBadge} pointerEvents="none">
-              <Text style={styles.bootBadgeText}>TrustLensAI</Text>
+              <Text style={styles.bootBadgeText}>VeriSphere AI</Text>
             </View>
             <Stack
               screenOptions={{

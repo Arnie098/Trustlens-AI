@@ -44,7 +44,7 @@ class FloatingAssistModule : Module() {
 
     /**
      * Opens the system MediaProjection permission dialog.
-     * User must approve before TrustLens can capture any screen content.
+     * User must approve before VeriSphere can capture any screen content.
      */
     AsyncFunction("requestScreenCapturePermission") {
       val ctx = appContext.reactContext ?: return@AsyncFunction false

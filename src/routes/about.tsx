@@ -22,16 +22,16 @@ import nathan from "@/assets/team/nathan-mercado.png";
 export const Route = createFileRoute("/about")({
   head: () => ({
     meta: [
-      { title: "About — TrustLensAI" },
+      { title: "About — VeriSphere AI" },
       {
         name: "description",
         content:
-          "TrustLensAI is an AI-assisted media literacy platform that helps people evaluate online content before believing or sharing it.",
+          "VeriSphere AI is an AI-assisted media literacy platform that helps people evaluate online content before believing or sharing it.",
       },
-      { property: "og:title", content: "About TrustLensAI" },
+      { property: "og:title", content: "About VeriSphere AI" },
       {
         property: "og:description",
-        content: "Our mission, approach, and the team behind TrustLensAI.",
+        content: "Our mission, approach, and the team behind VeriSphere AI.",
       },
     ],
   }),
@@ -67,7 +67,7 @@ const TEAM = [
     name: "Charles Gabriel Regidor",
     role: "Pitcher",
     image: charles,
-    blurb: "Owns narrative, demos, and how TrustLens is told to the room.",
+    blurb: "Owns narrative, demos, and how VeriSphere is told to the room.",
     icon: Mic2,
     accent: "from-teal/35 to-accent/40",
   },
@@ -114,7 +114,7 @@ function About() {
               <span className="italic text-muted-foreground">Built by people who mean it.</span>
             </h1>
             <p className="mt-8 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg animate-fade-up delay-200">
-              TrustLensAI is a media and information literacy platform. We surface signals — not
+              VeriSphere AI is a media and information literacy platform. We surface signals — not
               verdicts — so people can evaluate URLs, text, and images before believing or sharing.
             </p>
 
@@ -193,7 +193,7 @@ function About() {
                       Perplexity
                     </a>{" "}
                     is an AI answer engine that searches the live web and grounds every response in
-                    citations from real sources. TrustLensAI runs its verification analysis on
+                    citations from real sources. VeriSphere AI runs its verification analysis on
                     Perplexity&apos;s Sonar API: when you submit a URL, claim, or image, Sonar
                     cross-references it against current reporting and credible references — so trust
                     scores reflect what the web actually says right now, not a model&apos;s stale
@@ -239,7 +239,7 @@ function About() {
                 </h2>
                 <p className="mt-3 text-muted-foreground">
                   A cross-functional unit of builders, storytellers, and visual makers shipping
-                  TrustLens for the UNESCO media-literacy challenge.
+                  VeriSphere for the UNESCO media-literacy challenge.
                 </p>
               </div>
               <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground md:pb-1">

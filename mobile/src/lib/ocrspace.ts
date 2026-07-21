@@ -1,7 +1,7 @@
 /**
- * OCR.space client for TrustLens mobile (JavaScript/TypeScript).
+ * OCR.space client for VeriSphere mobile (JavaScript/TypeScript).
  *
- * Preferred: call TrustLens web API POST /api/ocr (key stays on server).
+ * Preferred: call VeriSphere web API POST /api/ocr (key stays on server).
  * Optional: direct OCR.space with EXPO_PUBLIC_OCR_SPACE_API_KEY (less secure).
  *
  * Docs: https://ocr.space/ocrapi

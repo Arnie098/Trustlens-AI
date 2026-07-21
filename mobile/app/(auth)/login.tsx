@@ -95,7 +95,7 @@ export default function LoginScreen() {
             style={styles.logo}
             resizeMode="contain"
           />
-          <Text style={styles.eyebrow}>TRUSTLENSAI</Text>
+          <Text style={styles.eyebrow}>VERISPHERE AI</Text>
           <Title>Think before you trust.</Title>
           <Muted>Sign in with your Supabase account (same as the web app when using cloud).</Muted>
           <Text style={styles.backend}>{backendLabel}</Text>

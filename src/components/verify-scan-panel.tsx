@@ -180,7 +180,7 @@ export function VerifyScanPanel({
     setBusy(null);
   }
 
-  async function onRunTrustLens() {
+  async function onRunVeriSphere() {
     if (!user) {
       toast.error("Please sign in to verify content.");
       return;
@@ -282,7 +282,7 @@ export function VerifyScanPanel({
     <div className="mt-4 space-y-4">
       <p className="text-sm text-muted-foreground">
         Capture a claim from a screen or photo. Review the image, edit any auto-read text, then run
-        TrustLens.
+        VeriSphere.
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -421,7 +421,7 @@ export function VerifyScanPanel({
         type="button"
         size="lg"
         disabled={!preparedBlob || locked}
-        onClick={onRunTrustLens}
+        onClick={onRunVeriSphere}
         className="min-h-11 min-w-[12rem] rounded-full shadow-glow transition-transform hover:scale-[1.02]"
       >
         {analyzing ? (
@@ -433,7 +433,7 @@ export function VerifyScanPanel({
             <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Reading text…
           </>
         ) : (
-          "Run TrustLens"
+          "Run VeriSphere AI"
         )}
       </Button>
       {analyzing && (

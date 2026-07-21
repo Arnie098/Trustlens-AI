@@ -99,7 +99,7 @@ object ScreenCaptureHelper {
 
       virtualDisplay =
         projection.createVirtualDisplay(
-          "TrustLensCapture",
+          "VeriSphereCapture",
           width,
           height,
           density,

@@ -1,5 +1,5 @@
 /**
- * TrustLens "Ocean Deep" — dark abyssal theme matching web `.dark` in src/styles.css.
+ * VeriSphere "Ocean Deep" — dark abyssal theme matching web `.dark` in src/styles.css.
  * Brand anchors: #0c2340 navy, #2d8a9e teal, #5cbdb9 aqua — lifted for dark UI.
  */
 export const colors = {

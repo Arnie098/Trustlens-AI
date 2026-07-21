@@ -23,7 +23,7 @@ function modelName(): string {
 }
 
 /**
- * Full TrustLens-shaped analysis from DeepSeek (reasoning only — no live web).
+ * Full VeriSphere-shaped analysis from DeepSeek (reasoning only — no live web).
  * For images without a vision model: uses OCR/caption text + filename.
  */
 export async function deepseekAnalyze(input: AnalysisInput): Promise<AnalysisResult> {
@@ -107,8 +107,8 @@ export function formatDraftForPerplexitySearch(
     .map((s) => s.trim())
     .filter(Boolean);
 
-  return `TrustLens free pipeline — DeepSeek already drafted a first-pass analysis.
-YOUR JOB: use live web search to corroborate or refute the claims. Return the final TrustLens JSON with concrete evidence (outlet + URL when possible). Never tell the user to search or verify themselves.
+  return `VeriSphere free pipeline — DeepSeek already drafted a first-pass analysis.
+YOUR JOB: use live web search to corroborate or refute the claims. Return the final VeriSphere JSON with concrete evidence (outlet + URL when possible). Never tell the user to search or verify themselves.
 
 ${original}
 

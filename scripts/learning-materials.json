@@ -24,7 +24,7 @@
       },
       {
         "title": "5. Practice & next steps",
-        "body": "## Capstone practice\n\nFind one viral headline today. Apply the checklist. Write two sentences: (1) what the headline claims, (2) what evidence you found.\n\n## Tools that help\n\n- TrustLensAI for a second pass of signals\n- Reverse search for related images\n- Official sites and wire services for confirmation\n\n## Before the quiz\n\nYou should be able to name three red-flag patterns and describe the 60-second checklist from memory.\n\n## Remember\n\nTrustLens scores are educational signals, not final verdicts."
+        "body": "## Capstone practice\n\nFind one viral headline today. Apply the checklist. Write two sentences: (1) what the headline claims, (2) what evidence you found.\n\n## Tools that help\n\n- VeriSphere AI for a second pass of signals\n- Reverse search for related images\n- Official sites and wire services for confirmation\n\n## Before the quiz\n\nYou should be able to name three red-flag patterns and describe the 60-second checklist from memory.\n\n## Remember\n\nVeriSphere scores are educational signals, not final verdicts."
       }
     ],
     "questions": [
@@ -145,8 +145,8 @@
         "body": "## Imperfect visual signals\n\n- Distorted hands, teeth, jewelry, or small text\n- Inconsistent shadows or reflections\n- Backgrounds that melt at edges\n\n## Audio/video\n\nWatch for lip-sync issues and too-clean audio for the setting. Again: imperfect signals only.\n\n## Key takeaway\n\nCombine visual suspicion with independent reporting."
       },
       {
-        "title": "5. Using TrustLensAI responsibly",
-        "body": "## What TrustLensAI is for\n\nIt surfaces media-literacy signals and next steps. It can be wrong, incomplete, or biased.\n\n## Good practice\n\n- Never treat a score as legal or scientific proof\n- Prefer primary documents and multiple outlets\n- Disclose uncertainty when you share analysis\n\n## Capstone\n\nTake one AI-suspicious post and write: (1) two signals you noticed, (2) two sources you would check, (3) whether you would share yet.\n\n## Key takeaway\n\nAI can assist judgment; it should not replace it."
+        "title": "5. Using VeriSphere AI responsibly",
+        "body": "## What VeriSphere AI is for\n\nIt surfaces media-literacy signals and next steps. It can be wrong, incomplete, or biased.\n\n## Good practice\n\n- Never treat a score as legal or scientific proof\n- Prefer primary documents and multiple outlets\n- Disclose uncertainty when you share analysis\n\n## Capstone\n\nTake one AI-suspicious post and write: (1) two signals you noticed, (2) two sources you would check, (3) whether you would share yet.\n\n## Key takeaway\n\nAI can assist judgment; it should not replace it."
       }
     ],
     "questions": [
@@ -169,7 +169,7 @@
         "explanation": "Fake references are a known failure mode of generative text systems."
       },
       {
-        "question": "TrustLensAI scores should be treated as:",
+        "question": "VeriSphere AI scores should be treated as:",
         "options": ["Final court verdicts", "Educational signals needing human judgment", "Proof of authorship", "Guaranteed truth"],
         "correct_index": 1,
         "explanation": "Scores support literacy; they do not replace independent verification."
@@ -264,7 +264,7 @@
       },
       {
         "title": "4. Correcting gracefully",
-        "body": "## If you shared something wrong\n\n- Correct in the same thread when possible\n- Link a better source without shaming people who trusted you\n- Model the behavior you want in your community\n\n## Culture building\n\nPraise careful checking. Ask \"source?\" kindly. Use TrustLensAI as a conversation starter, not a gavel.\n\n## Key takeaway\n\nHumility is a media-literacy skill."
+        "body": "## If you shared something wrong\n\n- Correct in the same thread when possible\n- Link a better source without shaming people who trusted you\n- Model the behavior you want in your community\n\n## Culture building\n\nPraise careful checking. Ask \"source?\" kindly. Use VeriSphere AI as a conversation starter, not a gavel.\n\n## Key takeaway\n\nHumility is a media-literacy skill."
       },
       {
         "title": "5. Personal action plan",

@@ -13,7 +13,7 @@ type BrandLogoProps = {
   className?: string;
   /** Optional subtitle under product name */
   subtitle?: string;
-  /** Product name override (e.g. TrustLens Admin) */
+  /** Product name override (e.g. VeriSphere AI Admin) */
   title?: string;
   /** Show text next to mark */
   showWordmark?: boolean;
@@ -27,7 +27,7 @@ const markSize = {
 } as const;
 
 /**
- * TrustLensAI brand mark — transparent PNG, no solid black/white plate.
+ * VeriSphere AI brand mark — transparent PNG, no solid black/white plate.
  */
 export function BrandLogo({
   to = "/",
@@ -35,7 +35,7 @@ export function BrandLogo({
   inverted = false,
   className,
   subtitle,
-  title = "TrustLensAI",
+  title = "VeriSphere AI",
   showWordmark = true,
   size = "lg",
 }: BrandLogoProps) {
@@ -47,7 +47,7 @@ export function BrandLogo({
       >
         <img
           src={logoMark}
-          alt="TrustLensAI — Think before you trust"
+          alt="VeriSphere AI — Think before you trust"
           className="h-auto w-full max-w-[200px] object-contain drop-shadow-sm"
           width={400}
           height={400}

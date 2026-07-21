@@ -1,10 +1,10 @@
-# TrustLens Mobile — Feature Inventory
+# VeriSphere Mobile — Feature Inventory
 
 **Branch:** `feat/mobile-capacitor-scanner-overlay`  
 **App path:** `mobile/`  
 **Stack:** Expo SDK 54 · React Native 0.81 · Expo Router · Supabase  
-**Package id:** `ai.trustlens.app` · App name: **TrustLensAI**  
-**Scheme:** `trustlens://`
+**Package id:** `ai.VeriSphere.app` · App name: **VeriSphere AI**  
+**Scheme:** `VeriSphere://`
 
 > Despite the branch name, this is **not Capacitor**. Capacitor was abandoned in favor of a native Expo / React Native app. See `MOBILE.md` and `mobile/README.md` for setup.
 
@@ -12,7 +12,7 @@
 
 ## 1. Product summary
 
-TrustLensAI mobile is a media-literacy companion that lets users:
+VeriSphere AI mobile is a media-literacy companion that lets users:
 
 1. **Verify** links, claims, screenshots, and camera scans with a TrustScore + evidence.
 2. **Learn** media literacy via courses, lessons, and quizzes.
@@ -85,7 +85,7 @@ Entry routing: `app/index.tsx` + session gate in `app/(app)/_layout.tsx`.
 
 | Capability | Details | Status |
 | --- | --- | --- |
-| Branding | TrustLensAI logo + wordmark | ✅ |
+| Branding | VeriSphere AI logo + wordmark | ✅ |
 | Quick actions | Verify content · Scan post · Verify clipboard · Achievements | ✅ |
 | Recent verifications | Last 8 requests for signed-in user | ✅ |
 | TrustScore preview | Score + category color/label per row | ✅ |
@@ -225,7 +225,7 @@ Supporting behaviors:
 | Screen capture | MediaProjection services + activities | ✅ |
 | Overlay result card | `FloatingResultOverlay.kt` | ✅ |
 | Native analyze client | `AnalyzeClient.kt` (uses shared API base URL) | ✅ |
-| Foreground notification | “TrustLens assist is on” channel | ✅ |
+| Foreground notification | “VeriSphere assist is on” channel | ✅ |
 
 #### Platform matrix
 
@@ -240,14 +240,14 @@ Supporting behaviors:
 
 ### 3.10 Deep links & share
 
-Scheme: **`trustlens://`**
+Scheme: **`VeriSphere://`**
 
 | Entry | Behavior | Status |
 | --- | --- | --- |
-| `trustlens://assist` | Open Assist menu | ✅ |
-| `trustlens://assist?action=clipboard` | Analyze clipboard | ✅ |
-| `trustlens://assist?action=capture` (+ optional `path`) | Analyze capture file | ✅ |
-| `trustlens://verify?tab=...&prefill=...` | Open Verify prefilled | ✅ |
+| `VeriSphere://assist` | Open Assist menu | ✅ |
+| `VeriSphere://assist?action=clipboard` | Analyze clipboard | ✅ |
+| `VeriSphere://assist?action=capture` (+ optional `path`) | Analyze capture file | ✅ |
+| `VeriSphere://verify?tab=...&prefill=...` | Open Verify prefilled | ✅ |
 | Android `SEND` intent | `text/plain` and `image/*` filters in `app.json` | ✅ Declared |
 | Incoming URL handler | `useIncomingShare` via `expo-linking` | ✅ |
 
@@ -358,7 +358,7 @@ iOS Info.plist usage strings: camera, photo library (for scan/import only).
 | iOS over-app bubble | Not possible with same UX; use Share / copy / in-app assist |
 | OCR without UNESCO service running | Set `EXPO_PUBLIC_OCR_URL` + run `python api.py`; falls back to manual caption |
 | Offline-first SQLite mode | Env switch exists; not the product default |
-| Expo Go native capture | Requires `npm run android` install of TrustLensAI |
+| Expo Go native capture | Requires `npm run android` install of VeriSphere AI |
 | Web as primary product | Web demo only; not a substitute for native assist |
 
 ---
@@ -390,7 +390,7 @@ iOS Info.plist usage strings: camera, photo library (for scan/import only).
 | UNESCO OCR server (Tesseract) | ✅ via `EXPO_PUBLIC_OCR_URL` |
 | OCR (optional ML Kit) | ✅ Optional |
 | Clipboard verify | ✅ |
-| Deep links `trustlens://` | ✅ |
+| Deep links `VeriSphere://` | ✅ |
 | Android share intents (declared) | ✅ |
 | Results + TrustGauge | ✅ |
 | Trust Replay | ✅ |

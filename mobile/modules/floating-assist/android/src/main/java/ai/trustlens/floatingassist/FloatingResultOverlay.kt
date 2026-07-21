@@ -67,6 +67,16 @@ object FloatingResultOverlay {
   private var loadActive = false
   private var loadPulse: ObjectAnimator? = null
   private var loadCurrentStage: AnalyzeLoadStage = AnalyzeLoadStage.CAPTURE
+  /** User minimized the analyzing card — analysis keeps running. */
+  private var loadCollapsed = false
+  private var loadExpandedBody: View? = null
+  private var loadMiniBar: View? = null
+  private var loadMiniPct: TextView? = null
+  private var loadMiniStage: TextView? = null
+  private var loadMiniElapsed: TextView? = null
+  private var loadCollapseBtn: TextView? = null
+  private var loadAppCtx: Context? = null
+  private var loadLastDetail: String = "Starting…"
 
   private val LOAD_STEPS =
     listOf(
@@ -85,38 +95,142 @@ object FloatingResultOverlay {
     main.post {
       val app = ctx.applicationContext
       ensureWm(app)
-      stopLoadTicker()
+      // Keep collapsed preference only within one analyze session if re-showing
+      val keepCollapsed = loadActive && loadCollapsed
+      val keepStartedAt = if (loadActive && loadStartedAtMs > 0L) loadStartedAtMs else 0L
+      stopLoadTickerOnly()
       removePanel()
       loadActive = true
-      loadStartedAtMs = System.currentTimeMillis()
+      loadCollapsed = keepCollapsed
+      loadAppCtx = app
+      loadStartedAtMs =
+        if (keepStartedAt > 0L) keepStartedAt else System.currentTimeMillis()
       loadCurrentStage = stage
+      loadLastDetail = detail
 
       val root = card(app)
 
-      // Top brand strip
-      root.addView(
+      // Top brand strip + collapse control
+      val header =
         LinearLayout(app).apply {
           orientation = LinearLayout.HORIZONTAL
           gravity = Gravity.CENTER_VERTICAL
-          addView(
-            TextView(app).apply {
-              text = "VERISPHERE AI"
-              setTextColor(Color.parseColor("#5ed4c8"))
-              textSize = 10f
-              typeface = Typeface.DEFAULT_BOLD
-              letterSpacing = 0.14f
-            },
-          )
-          addView(
-            TextView(app).apply {
-              text = "  ·  LIVE PIPELINE"
-              setTextColor(Color.parseColor("#6a8494"))
-              textSize = 10f
-              letterSpacing = 0.08f
-            },
-          )
+        }
+      header.addView(
+        TextView(app).apply {
+          text = "VERISPHERE AI"
+          setTextColor(Color.parseColor("#5ed4c8"))
+          textSize = 10f
+          typeface = Typeface.DEFAULT_BOLD
+          letterSpacing = 0.14f
+          layoutParams =
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         },
       )
+      header.addView(
+        TextView(app).apply {
+          text = "LIVE"
+          setTextColor(Color.parseColor("#6a8494"))
+          textSize = 10f
+          letterSpacing = 0.08f
+          setPadding(0, 0, dp(app, 8), 0)
+        },
+      )
+      val collapseBtn =
+        TextView(app).apply {
+          text = if (loadCollapsed) "  Expand  " else "  Minimize  "
+          setTextColor(Color.parseColor("#0a1424"))
+          textSize = 11f
+          typeface = Typeface.DEFAULT_BOLD
+          setPadding(dp(app, 10), dp(app, 6), dp(app, 10), dp(app, 6))
+          background =
+            GradientDrawable().apply {
+              setColor(Color.parseColor("#5ed4c8"))
+              cornerRadius = dp(app, 999).toFloat()
+            }
+          setOnClickListener {
+            if (loadCollapsed) expandAnalyzingPanel(app) else collapseAnalyzingPanel(app)
+          }
+        }
+      loadCollapseBtn = collapseBtn
+      header.addView(collapseBtn)
+      root.addView(header)
+
+      // Compact bar when minimized (analysis continues)
+      val mini =
+        LinearLayout(app).apply {
+          orientation = LinearLayout.VERTICAL
+          visibility = if (loadCollapsed) View.VISIBLE else View.GONE
+          setPadding(0, dp(app, 10), 0, dp(app, 4))
+          background =
+            GradientDrawable().apply {
+              setColor(Color.parseColor("#0a1628"))
+              cornerRadius = dp(app, 14).toFloat()
+              setStroke(dp(app, 1), Color.parseColor("#2d8a9e"))
+            }
+          setPadding(dp(app, 12), dp(app, 12), dp(app, 12), dp(app, 12))
+        }
+      val miniRow =
+        LinearLayout(app).apply {
+          orientation = LinearLayout.HORIZONTAL
+          gravity = Gravity.CENTER_VERTICAL
+        }
+      val miniPct =
+        TextView(app).apply {
+          text = "${stageProgress(stage)}%"
+          setTextColor(Color.parseColor("#5ed4c8"))
+          textSize = 20f
+          typeface = Typeface.DEFAULT_BOLD
+          setPadding(0, 0, dp(app, 10), 0)
+        }
+      loadMiniPct = miniPct
+      miniRow.addView(miniPct)
+      val miniStageCol =
+        LinearLayout(app).apply {
+          orientation = LinearLayout.VERTICAL
+          layoutParams =
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+      val miniStage =
+        TextView(app).apply {
+          text = "${stage.glyph}  ${stage.title}"
+          setTextColor(Color.WHITE)
+          textSize = 13f
+          typeface = Typeface.DEFAULT_BOLD
+        }
+      loadMiniStage = miniStage
+      miniStageCol.addView(miniStage)
+      val miniElapsed =
+        TextView(app).apply {
+          text = "⏱ 0:00 · analyzing…"
+          setTextColor(Color.parseColor("#8aa8b0"))
+          textSize = 11f
+          setPadding(0, dp(app, 2), 0, 0)
+        }
+      loadMiniElapsed = miniElapsed
+      miniStageCol.addView(miniElapsed)
+      miniRow.addView(miniStageCol)
+      mini.addView(miniRow)
+      mini.addView(
+        TextView(app).apply {
+          text = "Tap Expand for full status · analysis keeps running"
+          setTextColor(Color.parseColor("#6a8494"))
+          textSize = 10f
+          setPadding(0, dp(app, 8), 0, 0)
+        },
+      )
+      // Tap mini bar to expand
+      mini.setOnClickListener { expandAnalyzingPanel(app) }
+      loadMiniBar = mini
+      root.addView(mini)
+
+      // Full status body (hidden when collapsed)
+      val body =
+        LinearLayout(app).apply {
+          orientation = LinearLayout.VERTICAL
+          visibility = if (loadCollapsed) View.GONE else View.VISIBLE
+        }
+      loadExpandedBody = body
 
       // Hero: orbit + percent
       val hero =
@@ -167,7 +281,7 @@ object FloatingResultOverlay {
         },
       )
       hero.addView(centerStack)
-      root.addView(hero)
+      body.addView(hero)
 
       // Phase badge
       val badge =
@@ -194,7 +308,7 @@ object FloatingResultOverlay {
             }
         }
       loadPhaseBadge = badge
-      root.addView(badge)
+      body.addView(badge)
       loadPulse =
         ObjectAnimator.ofFloat(badge, View.ALPHA, 1f, 0.55f, 1f).apply {
           duration = 1400
@@ -213,7 +327,7 @@ object FloatingResultOverlay {
           setPadding(0, 0, 0, dp(app, 4))
         }
       loadStageTitle = stageTitle
-      root.addView(stageTitle)
+      body.addView(stageTitle)
 
       val detailTv =
         TextView(app).apply {
@@ -225,10 +339,10 @@ object FloatingResultOverlay {
           setPadding(dp(app, 4), 0, dp(app, 4), dp(app, 12))
         }
       loadDetail = detailTv
-      root.addView(detailTv)
+      body.addView(detailTv)
 
       // Gradient progress track
-      root.addView(buildFancyTrack(app, stageProgress(stage)))
+      body.addView(buildFancyTrack(app, stageProgress(stage)))
 
       val elapsed =
         TextView(app).apply {
@@ -239,10 +353,10 @@ object FloatingResultOverlay {
           setPadding(0, dp(app, 10), 0, dp(app, 12))
         }
       loadElapsed = elapsed
-      root.addView(elapsed)
+      body.addView(elapsed)
 
       // Horizontal step rail
-      root.addView(
+      body.addView(
         TextView(app).apply {
           text = "PIPELINE"
           setTextColor(Color.parseColor("#5ed4c8"))
@@ -252,11 +366,11 @@ object FloatingResultOverlay {
           setPadding(0, 0, 0, dp(app, 8))
         },
       )
-      root.addView(buildStepRail(app, stage.index))
+      body.addView(buildStepRail(app, stage.index))
 
-      root.addView(
+      body.addView(
         TextView(app).apply {
-          text = "Stay on Facebook · result stays open until you tap Close"
+          text = "Minimize anytime · analysis keeps running · result opens when done"
           setTextColor(Color.parseColor("#6a8494"))
           textSize = 10f
           gravity = Gravity.CENTER
@@ -264,9 +378,39 @@ object FloatingResultOverlay {
         },
       )
 
-      addPanel(app, wrapScroll(app, root))
+      root.addView(body)
+      addPanel(app, wrapScroll(app, root), compact = loadCollapsed)
       startLoadTicker()
       orbit.startSpin()
+    }
+  }
+
+  private fun collapseAnalyzingPanel(app: Context) {
+    if (!loadActive) return
+    loadCollapsed = true
+    loadExpandedBody?.visibility = View.GONE
+    loadMiniBar?.visibility = View.VISIBLE
+    loadCollapseBtn?.text = "  Expand  "
+    applyPanelSize(app, compact = true)
+    // Keep orbit spinning even when hidden (cheap)
+  }
+
+  private fun expandAnalyzingPanel(app: Context) {
+    if (!loadActive) return
+    loadCollapsed = false
+    loadExpandedBody?.visibility = View.VISIBLE
+    loadMiniBar?.visibility = View.GONE
+    loadCollapseBtn?.text = "  Minimize  "
+    applyPanelSize(app, compact = false)
+  }
+
+  private fun applyPanelSize(app: Context, compact: Boolean) {
+    val view = panel ?: return
+    val lp = view.layoutParams as? WindowManager.LayoutParams ?: return
+    lp.width = dp(app, if (compact) 260 else 312)
+    try {
+      windowManager?.updateViewLayout(view, lp)
+    } catch (_: Exception) {
     }
   }
 
@@ -278,11 +422,14 @@ object FloatingResultOverlay {
         return@post
       }
       loadCurrentStage = stage
+      loadLastDetail = detail
       val p = stageProgress(stage)
       loadStageTitle?.text = stage.title
       loadDetail?.text = detail
       loadPercent?.text = "$p%"
       loadPhaseBadge?.text = "  ${stage.glyph}  ${stage.title.uppercase()}  "
+      loadMiniPct?.text = "$p%"
+      loadMiniStage?.text = "${stage.glyph}  ${stage.title}"
       loadTrackFillLp?.weight = p.coerceIn(1, 100).toFloat()
       loadTrackFill?.requestLayout()
       loadOrbit?.setProgress(p / 100f)
@@ -442,7 +589,7 @@ object FloatingResultOverlay {
     }
 
   private fun startLoadTicker() {
-    stopLoadTicker()
+    stopLoadTickerOnly()
     val tick =
       object : Runnable {
         override fun run() {
@@ -464,8 +611,13 @@ object FloatingResultOverlay {
           val breathe = if (loadCurrentStage == AnalyzeLoadStage.VISION) {
             ((sec % 4) * 2).toInt() // 0..6
           } else 0
-          loadPercent?.text = "${(base + breathe).coerceAtMost(99)}%"
-          loadElapsed?.text = "⏱  $clock  ·  $hint"
+          val pctText = "${(base + breathe).coerceAtMost(99)}%"
+          loadPercent?.text = pctText
+          loadMiniPct?.text = pctText
+          val line = "⏱  $clock  ·  $hint"
+          loadElapsed?.text = line
+          loadMiniElapsed?.text = line
+          loadMiniStage?.text = "${loadCurrentStage.glyph}  ${loadCurrentStage.title}"
           loadTick = this
           main.postDelayed(this, 1000)
         }
@@ -474,10 +626,17 @@ object FloatingResultOverlay {
     main.post(tick)
   }
 
-  private fun stopLoadTicker() {
+  /** Stop the 1s elapsed timer only — does not end the analyzing session. */
+  private fun stopLoadTickerOnly() {
     loadTick?.let { main.removeCallbacks(it) }
     loadTick = null
+  }
+
+  /** End analyzing UI session (result, error, dismiss). Collapsed state resets here. */
+  private fun endAnalyzingSession() {
+    stopLoadTickerOnly()
     loadActive = false
+    loadCollapsed = false
     loadPulse?.cancel()
     loadPulse = null
     loadOrbit?.stopSpin()
@@ -603,7 +762,7 @@ object FloatingResultOverlay {
 
   fun showResult(ctx: Context, result: QuickAnalyzeResult, fromHistory: Boolean = false) {
     main.post {
-      stopLoadTicker()
+      endAnalyzingSession()
       val app = ctx.applicationContext
       ensureWm(app)
       if (!fromHistory) {
@@ -804,7 +963,7 @@ object FloatingResultOverlay {
   /** List of past floating checks — re-open any entry; only Close hides. */
   fun showHistory(ctx: Context) {
     main.post {
-      stopLoadTicker()
+      endAnalyzingSession()
       val app = ctx.applicationContext
       ensureWm(app)
       removePanel()
@@ -842,7 +1001,7 @@ object FloatingResultOverlay {
 
   fun showError(ctx: Context, message: String) {
     main.post {
-      stopLoadTicker()
+      endAnalyzingSession()
       val app = ctx.applicationContext
       ensureWm(app)
       removePanel()
@@ -888,7 +1047,7 @@ object FloatingResultOverlay {
 
   fun dismiss() {
     main.post {
-      stopLoadTicker()
+      endAnalyzingSession()
       removePanel()
     }
   }
@@ -905,6 +1064,13 @@ object FloatingResultOverlay {
     loadStepRows = emptyList()
     loadStepLabels = emptyList()
     loadStepDots = emptyList()
+    loadExpandedBody = null
+    loadMiniBar = null
+    loadMiniPct = null
+    loadMiniStage = null
+    loadMiniElapsed = null
+    loadCollapseBtn = null
+    loadAppCtx = null
   }
 
   private fun historyRow(app: Context, entry: AnalyzeHistoryEntry): View {
@@ -977,7 +1143,7 @@ object FloatingResultOverlay {
     removePanelClearingLoadRefs()
   }
 
-  private fun addPanel(app: Context, view: View) {
+  private fun addPanel(app: Context, view: View, compact: Boolean = false) {
     val type =
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -987,7 +1153,7 @@ object FloatingResultOverlay {
 
     val params =
       WindowManager.LayoutParams(
-        dp(app, 312),
+        dp(app, if (compact) 260 else 312),
         WindowManager.LayoutParams.WRAP_CONTENT,
         type,
         WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or

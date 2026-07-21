@@ -26,7 +26,7 @@ import { formatDistanceToNow, format, subDays, startOfDay } from "date-fns";
 const DashboardCharts = lazy(() => import("@/components/dashboard-charts"));
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
-  head: () => ({ meta: [{ title: "Dashboard — TrustLensAI" }] }),
+  head: () => ({ meta: [{ title: "Dashboard — VeriSphere AI" }] }),
   component: Dashboard,
 });
 

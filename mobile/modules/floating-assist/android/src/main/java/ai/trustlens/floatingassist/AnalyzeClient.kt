@@ -33,12 +33,11 @@ data class QuickAnalyzeResult(
 )
 
 /**
- * Floating-assist analyze — **server upload only** (no OCR-only fallback):
- *  1) Optional OCR as caption context only
- *  2) Compress JPEG → POST /api/uploads → public HTTPS URL (required)
- *  3) POST /api/analyze { type:image, imageUrl, text? } for Perplexity vision
+ * Floating-assist analyze — **Claude vision only, no fallback**:
+ *  1) Compress screenshot JPEG → base64
+ *  2) POST /api/analyze/vision { type:image, imageBase64 } — Claude reads the pixels
  *
- * If upload fails, the check fails. We never analyze without a hosted image URL.
+ * There is no OCR, no Perplexity, no upload hop. If Claude vision fails, the check fails.
  */
 object AnalyzeClient {
   private const val TAG = "TLAnalyze"
@@ -90,21 +89,12 @@ object AnalyzeClient {
     )
     val result =
       try {
-        postJson(ctx, "/api/analyze", body)
+        postJson(ctx, "/api/analyze/vision", body)
       } catch (e: Exception) {
         throw IllegalStateException(friendlyNetError("Analysis", e), e)
       }
     status(AnalyzeLoadStage.FINISH, "Building your result card…")
-    // Use server path so we never claim Claude vision when OCR fallback ran
-    val pathLabel =
-      when {
-        result.enginePath.contains("claude") -> "Claude vision · screenshot"
-        result.enginePath.contains("perplexity_vision") -> "Perplexity vision · screenshot"
-        result.enginePath.contains("ocr") || result.enginePath.contains("cookie") ->
-          "Text fallback (vision blocked) · limited"
-        else -> result.enginePath.ifBlank { "screenshot analysis" }
-      }
-    return result.copy(excerpt = pathLabel)
+    return result.copy(excerpt = "Claude vision · screenshot")
   }
 
   private fun friendlyNetError(phase: String, e: Exception): String {

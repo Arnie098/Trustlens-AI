@@ -47,7 +47,7 @@ function useReveal<T extends HTMLElement>() {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "TrustLensAI — Think Before You Trust" },
+      { title: "VeriSphere AI — Think Before You Trust" },
       {
         name: "description",
         content:
@@ -95,7 +95,7 @@ function Landing() {
               </h1>
 
               <p className="mt-8 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg animate-fade-up delay-200">
-                TrustLensAI reads the signals in a link, a paragraph, or an image — and gives you
+                VeriSphere AI reads the signals in a link, a paragraph, or an image — and gives you
                 the reasoning behind them. Slower judgement, sharper sharing.
               </p>
 
@@ -177,7 +177,7 @@ function Landing() {
               </span>
             </h2>
             <p className="mt-6 max-w-md text-sm leading-relaxed text-muted-foreground sm:text-base">
-              From origin to amplification, TrustLensAI visualises the network of signals behind the
+              From origin to amplification, VeriSphere AI visualises the network of signals behind the
               content you see — so you can decide with clarity.
             </p>
           </div>

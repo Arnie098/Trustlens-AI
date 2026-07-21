@@ -58,7 +58,7 @@ export function SiteFooter() {
         </div>
         <div className="mt-10 border-t border-white/10 pt-6 text-xs text-brand-navy-foreground/80">
           <p>
-            TrustLensAI supports critical thinking and does not replace independent fact-checking or
+            VeriSphere AI supports critical thinking and does not replace independent fact-checking or
             human judgment. AI analysis may be incomplete, inaccurate, or biased.
           </p>
           <p className="mt-2">
@@ -73,7 +73,7 @@ export function SiteFooter() {
             </a>{" "}
             Sonar — real-time, web-grounded AI with cited sources.
           </p>
-          <p className="mt-2">© {new Date().getFullYear()} TrustLensAI. All rights reserved.</p>
+          <p className="mt-2">© {new Date().getFullYear()} VeriSphere AI. All rights reserved.</p>
         </div>
       </div>
     </footer>

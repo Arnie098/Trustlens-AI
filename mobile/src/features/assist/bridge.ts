@@ -51,7 +51,7 @@ export const FloatingAssist = {
     return Platform.OS === "android" || Platform.OS === "web";
   },
 
-  /** True only inside a native TrustLens install (not Expo Go). */
+  /** True only inside a native VeriSphere install (not Expo Go). */
   hasNativeModule(): boolean {
     return Platform.OS === "android" && isNativeLinked();
   },
@@ -99,7 +99,7 @@ export const FloatingAssist = {
           return {
             ok: true,
             message:
-              "Allow “Display over other apps” for TrustLens, then turn Assist on again so the bubble can appear over Facebook.",
+              "Allow “Display over other apps” for VeriSphere, then turn Assist on again so the bubble can appear over Facebook.",
           };
         }
         await FloatingAssistNative.startBubble();
@@ -125,7 +125,7 @@ export const FloatingAssist = {
       message:
         Platform.OS === "web"
           ? "Demo mode: TL button bottom-right. Real screen capture needs the Android app."
-          : "You are in Expo Go. Screen capture over Facebook needs the real TrustLens app.\n\nOn your PC, USB-connect the phone, then in the mobile folder run:\n\nnpm run android\n\nThat installs TrustLensAI. Open that app (not Expo Go), enable Assist, then use the bubble.",
+          : "You are in Expo Go. Screen capture over Facebook needs the real VeriSphere app.\n\nOn your PC, USB-connect the phone, then in the mobile folder run:\n\nnpm run android\n\nThat installs VeriSphere AI. Open that app (not Expo Go), enable Assist, then use the bubble.",
     };
   },
 

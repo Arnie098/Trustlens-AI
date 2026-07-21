@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { AlertTriangle } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/profile")({
-  head: () => ({ meta: [{ title: "Profile & Settings — TrustLensAI" }] }),
+  head: () => ({ meta: [{ title: "Profile & Settings — VeriSphere AI" }] }),
   component: ProfilePage,
 });
 
@@ -201,7 +201,7 @@ function ProfilePage() {
         <CardHeader>
           <CardTitle className="font-display tracking-tight">AI processing consent</CardTitle>
           <CardDescription>
-            You control whether TrustLensAI can analyze your submissions.
+            You control whether VeriSphere AI can analyze your submissions.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

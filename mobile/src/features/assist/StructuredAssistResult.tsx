@@ -16,7 +16,7 @@ type Props = {
  * Compact, structured result card for Floating Assist.
  * Score · category · summary · top concerns — not a full-page takeover.
  */
-export function StructuredAssistResult({ result, onDismiss, autoDismissMs = 12000 }: Props) {
+export function StructuredAssistResult({ result, onDismiss, autoDismissMs = 0 }: Props) {
   const [secondsLeft, setSecondsLeft] = useState(
     autoDismissMs > 0 ? Math.ceil(autoDismissMs / 1000) : 0,
   );
@@ -47,7 +47,7 @@ export function StructuredAssistResult({ result, onDismiss, autoDismissMs = 1200
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
-        <Text style={styles.kicker}>TrustLens · quick check</Text>
+        <Text style={styles.kicker}>VeriSphere · quick check</Text>
         {secondsLeft > 0 ? (
           <Text style={styles.timer}>closes in {secondsLeft}s</Text>
         ) : null}
@@ -63,12 +63,12 @@ export function StructuredAssistResult({ result, onDismiss, autoDismissMs = 1200
         </View>
       </View>
 
-      <Text style={styles.summary} numberOfLines={3}>
+      <Text style={styles.summary} numberOfLines={12}>
         {result.summary}
       </Text>
 
       {result.preview ? (
-        <Text style={styles.preview} numberOfLines={2}>
+        <Text style={styles.preview} numberOfLines={4}>
           From{" "}
           {result.source === "clipboard"
             ? "copied text"
@@ -82,8 +82,8 @@ export function StructuredAssistResult({ result, onDismiss, autoDismissMs = 1200
       {result.concerns.length > 0 ? (
         <View style={styles.block}>
           <Text style={styles.blockTitle}>Concerns</Text>
-          {result.concerns.slice(0, 3).map((item, i) => (
-            <Text key={i} style={styles.bullet} numberOfLines={2}>
+          {result.concerns.slice(0, 5).map((item, i) => (
+            <Text key={i} style={styles.bullet} numberOfLines={4}>
               · {item}
             </Text>
           ))}
@@ -93,8 +93,8 @@ export function StructuredAssistResult({ result, onDismiss, autoDismissMs = 1200
       {result.nextSteps.length > 0 ? (
         <View style={styles.block}>
           <Text style={styles.blockTitle}>Next steps</Text>
-          {result.nextSteps.slice(0, 2).map((item, i) => (
-            <Text key={i} style={styles.bullet} numberOfLines={2}>
+          {result.nextSteps.slice(0, 4).map((item, i) => (
+            <Text key={i} style={styles.bullet} numberOfLines={4}>
               · {item}
             </Text>
           ))}
@@ -112,11 +112,13 @@ export function StructuredAssistResult({ result, onDismiss, autoDismissMs = 1200
           <Text style={styles.btnPrimaryText}>Full report</Text>
         </Pressable>
         <Pressable style={styles.btnGhost} onPress={onDismiss}>
-          <Text style={styles.btnGhostText}>Done</Text>
+          <Text style={styles.btnGhostText}>Close</Text>
         </Pressable>
       </View>
 
-      <Text style={styles.disclaimer}>Signals, not verdicts. Always double-check before sharing.</Text>
+      <Text style={styles.disclaimer}>
+        Stays open until you tap Close. Signals, not verdicts — double-check before sharing.
+      </Text>
     </View>
   );
 }

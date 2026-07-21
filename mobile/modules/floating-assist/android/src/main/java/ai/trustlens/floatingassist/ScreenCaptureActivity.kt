@@ -21,7 +21,7 @@ import android.widget.TextView
 /**
  * Host for the system MediaProjection permission dialog.
  *
- * Must not look like a stuck TrustLens splash. If the OEM dialog is delayed or
+ * Must not look like a stuck VeriSphere splash. If the OEM dialog is delayed or
  * never appears, show a clear cancelable panel so the user is never trapped.
  */
 class ScreenCaptureActivity : Activity() {
@@ -50,7 +50,7 @@ class ScreenCaptureActivity : Activity() {
     // Escape hatch: never leave the user on a blank activity forever.
     mainHandler.postDelayed({
       if (!finished && !handedOff) {
-        failAndFinish("Screen capture timed out. Open TrustLens again or tap the TL bubble.")
+        failAndFinish("Screen capture timed out. Open VeriSphere again or tap the TL bubble.")
       }
     }, TIMEOUT_MS)
   }
@@ -85,7 +85,7 @@ class ScreenCaptureActivity : Activity() {
     val body =
       TextView(this).apply {
         text =
-          "Android should show a system dialog to allow TrustLens to capture the screen once.\n\nIf you do not see it, tap Cancel and try the bubble again."
+          "Android should show a system dialog to allow VeriSphere to capture the screen once.\n\nIf you do not see it, tap Cancel and try the bubble again."
         setTextColor(Color.parseColor("#eef7f8"))
         textSize = 14f
         gravity = Gravity.CENTER
@@ -165,7 +165,7 @@ class ScreenCaptureActivity : Activity() {
 
   /**
    * Exit this task and return the user to whatever app was under us.
-   * NEVER launch MainActivity / TrustLens UI here.
+   * NEVER launch MainActivity / VeriSphere UI here.
    */
   private fun leaveWithoutOpeningApp() {
     if (finished) return
@@ -187,7 +187,7 @@ class ScreenCaptureActivity : Activity() {
   private fun failAndFinish(message: String) {
     if (finished) return
     CaptureNotifier.cancelProgress(applicationContext)
-    // Floating error over current app — do NOT open TrustLens.
+    // Floating error over current app — do NOT open VeriSphere.
     try {
       FloatingResultOverlay.showError(applicationContext, message)
       CaptureNotifier.showError(applicationContext, message)

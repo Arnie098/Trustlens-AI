@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "TrustLensAI",
+    "name": "VeriSphere AI",
     "slug": "trustlens",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,8 +11,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "ai.trustlens.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "TrustLens needs the camera to scan posts for verification.",
-        "NSPhotoLibraryUsageDescription": "TrustLens needs photo access to import screenshots for verification."
+        "NSCameraUsageDescription": "VeriSphere needs the camera to scan posts for verification.",
+        "NSPhotoLibraryUsageDescription": "VeriSphere needs photo access to import screenshots for verification."
       }
     },
     "android": {
@@ -77,8 +77,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow TrustLens to access photos for screenshot verification.",
-          "cameraPermission": "Allow TrustLens to use the camera to scan posts."
+          "photosPermission": "Allow VeriSphere to access photos for screenshot verification.",
+          "cameraPermission": "Allow VeriSphere to use the camera to scan posts."
         }
       ],
       [

@@ -23,6 +23,4 @@ android {
 
 dependencies {
   implementation "androidx.core:core-ktx:1.15.0"
-  // On-device OCR so floating analyze grades real screen text, not a meta prompt
-  implementation "com.google.mlkit:text-recognition:16.0.1"
 }

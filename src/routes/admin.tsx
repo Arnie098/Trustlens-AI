@@ -25,7 +25,7 @@ import type { TrustCategory } from "@/lib/db";
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
-      { title: "Admin console — TrustLensAI" },
+      { title: "Admin console — VeriSphere AI" },
       { name: "robots", content: "noindex" },
     ],
   }),

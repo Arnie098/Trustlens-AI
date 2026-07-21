@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { ArrowLeft, CheckCircle2, Lightbulb, XCircle } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/quiz/$moduleId")({
-  head: () => ({ meta: [{ title: "Quiz — TrustLensAI" }] }),
+  head: () => ({ meta: [{ title: "Quiz — VeriSphere AI" }] }),
   component: QuizPage,
 });
 

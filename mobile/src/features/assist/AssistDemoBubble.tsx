@@ -37,7 +37,7 @@ export function AssistDemoBubble({ tabBarHeight = 72 }: Props) {
     <View style={[styles.wrap, { bottom }]} pointerEvents="box-none">
       {expanded ? (
         <View style={styles.panel}>
-          <Text style={styles.title}>TrustLens</Text>
+          <Text style={styles.title}>VeriSphere AI</Text>
           <Text style={styles.hint}>
             Analyze content on your screen: the floating window screenshots, then AI checks it.
           </Text>
@@ -70,7 +70,7 @@ export function AssistDemoBubble({ tabBarHeight = 72 }: Props) {
       <Pressable
         style={[styles.bubble, expanded && styles.bubbleActive]}
         onPress={() => setExpanded((v) => !v)}
-        accessibilityLabel="TrustLens floating assist"
+        accessibilityLabel="VeriSphere floating assist"
       >
         <Text style={styles.bubbleText}>TL</Text>
       </Pressable>

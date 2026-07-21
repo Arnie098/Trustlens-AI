@@ -1,7 +1,7 @@
 /**
  * Auto-analyze helpers for Floating Assist.
  * - Clipboard text
- * - Screen capture taken BY TrustLens (MediaProjection) — user does not screenshot manually
+ * - Screen capture taken BY VeriSphere (MediaProjection) — user does not screenshot manually
  */
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
@@ -107,7 +107,7 @@ export async function analyzeClipboardText(
 }
 
 /**
- * Analyze an image already captured by TrustLens (native path) or a gallery fallback URI.
+ * Analyze an image already captured by VeriSphere (native path) or a gallery fallback URI.
  */
 export async function analyzeCapturedImage(
   userId: string,
@@ -210,7 +210,7 @@ function wrapNetworkError(e: unknown, where: string): Error {
 }
 
 /**
- * Preferred path: TrustLens captures the screen itself (native MediaProjection).
+ * Preferred path: VeriSphere captures the screen itself (native MediaProjection).
  * Returns "started" when the native capture activity was launched (result arrives via deep link).
  * If [existingPath] is already set (from deep link), analyzes immediately.
  */
@@ -230,10 +230,10 @@ export async function captureAndAnalyze(
 
   throw new Error(
     "Expo Go cannot screenshot other apps (Android security). " +
-      "Install the TrustLens app from your PC:\n\n" +
+      "Install the VeriSphere app from your PC:\n\n" +
       "1. USB-connect this phone (USB debugging on)\n" +
       "2. In the mobile folder run:  npm run android\n" +
-      "3. Open the TrustLensAI app (not Expo Go)\n" +
+      "3. Open the VeriSphere AI app (not Expo Go)\n" +
       "4. Profile → enable Floating Assist → Analyze content on my screen\n\n" +
       "Until then: use “Copied text” or “Pick a photo”.",
   );

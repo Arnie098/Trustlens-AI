@@ -37,7 +37,7 @@ type VerifyTab = "url" | "text" | "image" | "scan";
 
 export const Route = createFileRoute("/_authenticated/verify")({
   validateSearch: (s) => search.parse(s),
-  head: () => ({ meta: [{ title: "Verify content — TrustLensAI" }] }),
+  head: () => ({ meta: [{ title: "Verify content — VeriSphere AI" }] }),
   component: VerifyPage,
 });
 

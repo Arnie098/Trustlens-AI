@@ -1,5 +1,5 @@
 /**
- * Browser client for TrustLens OCR proxy (OCR.space on the server).
+ * Browser client for VeriSphere OCR proxy (OCR.space on the server).
  * POST /api/ocr — API key never leaves the server.
  */
 

@@ -26,6 +26,12 @@ function isSqliteProvider(): boolean {
 async function tryAppApis(request: Request): Promise<Response | null> {
   const pathname = new URL(request.url).pathname;
 
+  // Mobile screenshot vision — Claude only, no fallback (match before /api/analyze)
+  if (pathname === "/api/analyze/vision") {
+    const { handleAnalyzeVisionApi } = await import("./lib/ai/analyze-vision-handler");
+    return handleAnalyzeVisionApi(request);
+  }
+
   // Perplexity (or mock) content verification — always available
   if (pathname === "/api/analyze" || pathname.startsWith("/api/analyze/")) {
     const { handleAnalyzeApi } = await import("./lib/ai/analyze-handler");

@@ -1,6 +1,10 @@
 /** Helpers for turning mixed evidence strings (prose + Citation: URLs) into UI-friendly items. */
 
-import { looksLikeAnalysisJsonBlob, sanitizeDisplayList, sanitizeListItem } from "@/lib/ai/sanitize-text";
+import {
+  looksLikeAnalysisJsonBlob,
+  sanitizeDisplayList,
+  sanitizeListItem,
+} from "@/lib/ai/sanitize-text";
 
 export type EvidenceProse = { kind: "prose"; text: string };
 export type EvidenceSource = {
@@ -39,8 +43,7 @@ function sourceLabel(url: string): { label: string; hostname: string } {
     const u = new URL(url);
     const host = u.hostname.replace(/^www\./, "");
     const path = u.pathname === "/" ? "" : u.pathname.replace(/\/$/, "");
-    const shortPath =
-      path.length > 48 ? `${path.slice(0, 28)}…${path.slice(-12)}` : path;
+    const shortPath = path.length > 48 ? `${path.slice(0, 28)}…${path.slice(-12)}` : path;
     return {
       hostname: host,
       label: shortPath ? `${host}${shortPath}` : host,
@@ -81,8 +84,7 @@ export function parseEvidenceItems(items: unknown): {
     const cleaned = sanitizeListItem(raw);
     if (!cleaned) continue;
     const url = extractUrl(cleaned);
-    const isCitationLine =
-      CITATION_PREFIX.test(cleaned.trim()) || (url && cleaned.trim() === url);
+    const isCitationLine = CITATION_PREFIX.test(cleaned.trim()) || (url && cleaned.trim() === url);
 
     if (url && (isCitationLine || looksLikeUrl(cleaned.trim()))) {
       if (!isUsefulSourceUrl(url)) continue;
@@ -114,6 +116,80 @@ export function parseEvidenceItems(items: unknown): {
 
   return { prose, sources };
 }
+
+/**
+ * Keep only citations whose URL (host + decoded path) mentions at least one
+ * distinctive entity from the claim. The cookie session tends to return
+ * topic-shaped but off-claim links (e.g. "police blotter" essays for a specific
+ * assault report); those share no entity token and get dropped.
+ */
+export function filterCitationsByRelevance(urls: string[], entities: string[]): string[] {
+  const tokens = entities.map((e) => e.toLowerCase().trim()).filter((e) => e.length >= 4);
+  if (tokens.length === 0) return urls;
+  return urls.filter((url) => {
+    let haystack = url.toLowerCase();
+    try {
+      haystack = decodeURIComponent(haystack);
+    } catch {
+      /* keep raw on malformed escapes */
+    }
+    // Normalize slug separators so "puerto-princesa" matches "puerto princesa".
+    haystack = haystack.replace(/[-_+%]/g, " ");
+    return tokens.some((t) => haystack.includes(t));
+  });
+}
+
+/**
+ * Pull distinctive entity tokens (proper nouns, multiword place/name phrases)
+ * from claim prose to drive citation relevance filtering.
+ */
+export function extractClaimEntities(...texts: string[]): string[] {
+  const blob = texts.filter(Boolean).join(" ");
+  const out = new Set<string>();
+  // Capitalized single or multiword sequences (e.g. "Puerto Princesa", "Abante").
+  const matches = blob.match(/\b[A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*/g) || [];
+  for (const m of matches) {
+    const phrase = m.trim();
+    if (phrase.length < 4) continue;
+    if (STOPWORD_ENTITIES.has(phrase.toLowerCase())) continue;
+    out.add(phrase);
+    // Also index each significant word so a partial slug still matches.
+    for (const w of phrase.split(/\s+/)) {
+      if (w.length >= 4 && !STOPWORD_ENTITIES.has(w.toLowerCase())) out.add(w);
+    }
+  }
+  return [...out];
+}
+
+const STOPWORD_ENTITIES = new Set([
+  "the",
+  "this",
+  "that",
+  "claim",
+  "post",
+  "source",
+  "evidence",
+  "context",
+  "answer",
+  "without",
+  "official",
+  "based",
+  "independent",
+  "citation",
+  "note",
+  // Nationality / broad-region adjectives match almost any in-region source and
+  // are too weak to confirm a citation is about the specific claim.
+  "philippine",
+  "philippines",
+  "filipino",
+  "american",
+  "chinese",
+  "national",
+  "international",
+  "facebook",
+  "twitter",
+  "reddit",
+]);
 
 /** Prefer high-quality citation URLs when merging analysis results. */
 export function filterCitationUrls(urls: string[], limit = 5): string[] {

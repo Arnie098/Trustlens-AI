@@ -50,7 +50,7 @@ function buildQuery(input: AnalysisInput): string {
         ? `Claim/text:\n${input.text.slice(0, 2500)}`
         : `Image label: ${input.imageName || "uploaded image"}`;
 
-  return `You are TrustLensAI (media literacy analyst with live web search — not a truth oracle).
+  return `You are VeriSphere AI (media literacy analyst with live web search — not a truth oracle).
 Identify the factual claims, then search the open web YOURSELF for original sources, official statements, fact-checks, independent corroboration, contradictions, and source reputation. Put the concrete findings you obtained in evidence/source_assessment/context_analysis. Never tell the user to verify, search, Google, cross-check, consult other sources, find separate reports, or do their own research; those are your tasks. Do not say that content requires verification or cross-checking—perform those checks and state what you found. If nothing reliable is found, report that no reliable corroboration was found in your search.
 Reply with ONLY one JSON object (no markdown, no prose):
 
@@ -286,7 +286,7 @@ export async function perplexityCookieAnalyze(input: AnalysisInput): Promise<Ana
     console.warn("[analyze] structured parse failed:", err);
   }
 
-  // Prose / incomplete JSON — still return a usable TrustLens result
+  // Prose / incomplete JSON — still return a usable VeriSphere result
   const lower = answer.toLowerCase();
   let trust_score = 55;
   if (/(miracle|conspiracy|clickbait|false|debunked|misleading)/.test(lower)) trust_score = 28;

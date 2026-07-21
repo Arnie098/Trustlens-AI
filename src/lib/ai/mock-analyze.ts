@@ -60,7 +60,7 @@ export async function mockAnalyze(input: AnalysisInput): Promise<AnalysisResult>
     "Open any linked citations and check date, author, and full context",
     "Pause before resharing if the summary still feels incomplete",
     "Compare the claim wording to what the original source actually said",
-    "Take a TrustLens lesson on spotting misleading headlines",
+    "Take a VeriSphere lesson on spotting misleading headlines",
   ];
 
   const pick = (arr: string[], n: number) =>

@@ -182,7 +182,7 @@ export default function VerifyScreen() {
         setOcrEngine("none");
         setOcrMeta({
           action: "retake",
-          message: `OCR failed: ${msg}. You can still type a caption and Run TrustLens.`,
+          message: `OCR failed: ${msg}. You can still type a caption and Run VeriSphere.`,
         });
         notify(
           "OCR failed",
@@ -408,7 +408,7 @@ export default function VerifyScreen() {
                 onChangeText={setOcrHint}
                 placeholder="Extracted or typed caption…"
               />
-              <Button title="Run TrustLens" loading={loading} onPress={uploadAndAnalyzeImage} />
+              <Button title="Run VeriSphere AI" loading={loading} onPress={uploadAndAnalyzeImage} />
             </View>
           ) : null}
 

@@ -23,6 +23,16 @@ function localApiPlugin(): Plugin {
         const urlPath = (req.url ?? "").split("?")[0];
 
         try {
+          if (urlPath === "/api/analyze/vision") {
+            const request = await nodeToFetchRequest(req);
+            const { handleAnalyzeVisionApi } = (await server.ssrLoadModule(
+              "/src/lib/ai/analyze-vision-handler",
+            )) as typeof import("./src/lib/ai/analyze-vision-handler");
+            const response = await handleAnalyzeVisionApi(request);
+            await writeFetchResponse(res, response);
+            return;
+          }
+
           if (urlPath === "/api/analyze" || urlPath.startsWith("/api/analyze/")) {
             const request = await nodeToFetchRequest(req);
             // ssrLoadModule (not a literal import()) so esbuild doesn't bundle this

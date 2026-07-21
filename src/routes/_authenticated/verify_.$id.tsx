@@ -31,7 +31,7 @@ import {
 // Flat route: /verify/$id is a sibling of /verify (not nested under it).
 // Nested verify.$id never rendered because verify.tsx had no <Outlet />.
 export const Route = createFileRoute("/_authenticated/verify_/$id")({
-  head: () => ({ meta: [{ title: "Verification results — TrustLensAI" }] }),
+  head: () => ({ meta: [{ title: "Verification results — VeriSphere AI" }] }),
   component: ResultsPage,
 });
 
@@ -218,7 +218,7 @@ function ResultsPage() {
           </div>
 
           <p className="mt-6 rounded-xl border border-border bg-background/40 p-4 text-xs text-muted-foreground">
-            AI analysis may be incomplete, inaccurate, or biased. TrustLensAI supports critical
+            AI analysis may be incomplete, inaccurate, or biased. VeriSphere AI supports critical
             thinking and does not replace independent fact-checking or human judgment.
           </p>
         </div>

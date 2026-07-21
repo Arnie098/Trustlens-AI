@@ -61,7 +61,7 @@ export default {
   async captureScreen(): Promise<boolean> {
     if (!Native?.captureScreen) {
       throw new Error(
-        "Screen capture is not available in Expo Go. Install the TrustLens Android app: in the mobile folder run  npm run android",
+        "Screen capture is not available in Expo Go. Install the VeriSphere Android app: in the mobile folder run  npm run android",
       );
     }
     return Native.captureScreen();
@@ -81,7 +81,7 @@ export default {
   async startBubble(): Promise<void> {
     if (!Native?.startBubble) {
       throw new Error(
-        "Floating bubble needs the TrustLens Android app (not Expo Go). Run: npm run android",
+        "Floating bubble needs the VeriSphere Android app (not Expo Go). Run: npm run android",
       );
     }
     return Native.startBubble();

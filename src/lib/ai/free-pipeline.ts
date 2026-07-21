@@ -49,7 +49,7 @@ function mergeDraftAndGrounded(
 /**
  * 1) DeepSeek structures / reasons (free API key tier)
  * 2) Perplexity cookie session searches the web for corroboration
- * 3) Merge into one TrustLens result
+ * 3) Merge into one VeriSphere result
  */
 export async function deepseekThenPerplexityCookie(
   input: AnalysisInput,

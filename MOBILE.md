@@ -1,4 +1,4 @@
-# TrustLens Mobile
+# VeriSphere Mobile
 
 **Only one mobile project:** `mobile/`
 

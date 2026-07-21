@@ -52,7 +52,7 @@ export default function ProfileScreen() {
           <Muted>
             Default is off. After you enable it, look for a teal <Text style={styles.em}>TL</Text>{" "}
             circle on the <Text style={styles.em}>right edge</Text> of the screen (also over Facebook).
-            A notification “TrustLens assist is on” stays in the status bar.
+            A notification “VeriSphere assist is on” stays in the status bar.
           </Muted>
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>Enable floating assist</Text>
@@ -67,7 +67,7 @@ export default function ProfileScreen() {
             Native bubble:{" "}
             {FloatingAssist.hasNativeModule()
               ? "ready on this build"
-              : "not linked — reinstall TrustLensAI (not Expo Go)"}
+              : "not linked — reinstall VeriSphere AI (not Expo Go)"}
           </Muted>
           <View style={{ height: 8 }} />
           <Button
@@ -101,7 +101,7 @@ export default function ProfileScreen() {
           ) : null}
           {Platform.OS === "ios" ? (
             <Muted>
-              iOS cannot show a bubble over Facebook. Use Share → TrustLens, or Try assist now after copying
+              iOS cannot show a bubble over Facebook. Use Share → VeriSphere, or Try assist now after copying
               text.
             </Muted>
           ) : null}
@@ -141,7 +141,7 @@ export default function ProfileScreen() {
           <Text style={styles.mono}>
             Native capture:{" "}
             {FloatingAssist.hasNativeModule()
-              ? "YES — TrustLensAI app (screenshot works)"
+              ? "YES — VeriSphere AI app (screenshot works)"
               : "NO — you are in Expo Go. Run: npm run android"}
           </Text>
         </Card>

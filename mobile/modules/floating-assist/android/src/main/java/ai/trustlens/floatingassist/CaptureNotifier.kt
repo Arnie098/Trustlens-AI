@@ -25,7 +25,7 @@ object CaptureNotifier {
     val channel =
       NotificationChannel(
         CHANNEL_ID,
-        "TrustLens screen capture",
+        "VeriSphere screen capture",
         NotificationManager.IMPORTANCE_HIGH,
       ).apply {
         description = "Screenshot and analysis status"
@@ -65,7 +65,7 @@ object CaptureNotifier {
     val n =
       build(
         ctx,
-        "TrustLens check ready",
+        "VeriSphere check ready",
         "See the floating card on your screen (tap path not required).",
         ongoing = false,
         autoCancel = true,

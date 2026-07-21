@@ -28,7 +28,7 @@ type Action = "menu" | "clipboard" | "capture" | "screenshot";
 /**
  * Floating Assist popup:
  * Primary: "Analyze content on my screen"
- *   → TrustLens takes a screenshot (user permission) → AI analyzes
+ *   → VeriSphere takes a screenshot (user permission) → AI analyzes
  * Secondary: copied text
  */
 export default function AssistScreen() {
@@ -44,7 +44,7 @@ export default function AssistScreen() {
 
   const runClipboard = useCallback(async () => {
     if (!user) {
-      Alert.alert("Sign in required", "Sign in to TrustLens, then try again.");
+      Alert.alert("Sign in required", "Sign in to VeriSphere, then try again.");
       router.replace("/(auth)/login");
       return;
     }
@@ -66,7 +66,7 @@ export default function AssistScreen() {
   const runCapture = useCallback(
     async (path?: string | null) => {
       if (!user) {
-        Alert.alert("Sign in required", "Sign in to TrustLens, then try again.");
+        Alert.alert("Sign in required", "Sign in to VeriSphere, then try again.");
         router.replace("/(auth)/login");
         return;
       }
@@ -92,7 +92,7 @@ export default function AssistScreen() {
 
   const runGalleryFallback = useCallback(async () => {
     if (!user) {
-      Alert.alert("Sign in required", "Sign in to TrustLens, then try again.");
+      Alert.alert("Sign in required", "Sign in to VeriSphere, then try again.");
       router.replace("/(auth)/login");
       return;
     }
@@ -168,7 +168,7 @@ export default function AssistScreen() {
                 <Text style={styles.optionSub}>
                   {hasNativeCapture
                     ? "1) App screenshots  ·  2) AI analyzes"
-                    : "Works in TrustLensAI app — not Expo Go"}
+                    : "Works in VeriSphere AI app — not Expo Go"}
                 </Text>
               </View>
             </Pressable>
@@ -182,7 +182,7 @@ export default function AssistScreen() {
                 </Text>
                 <Text style={styles.expoCmd}>npm run android</Text>
                 <Text style={styles.expoNoteBody}>
-                  Then open the installed <Text style={styles.em}>TrustLensAI</Text> app (icon on
+                  Then open the installed <Text style={styles.em}>VeriSphere AI</Text> app (icon on
                   home screen) — not Expo Go.
                 </Text>
               </View>
@@ -248,7 +248,7 @@ export default function AssistScreen() {
 
         {phase === "result" && result ? (
           <View style={styles.resultWrap}>
-            <StructuredAssistResult result={result} onDismiss={close} autoDismissMs={14000} />
+            <StructuredAssistResult result={result} onDismiss={close} autoDismissMs={0} />
           </View>
         ) : null}
       </View>

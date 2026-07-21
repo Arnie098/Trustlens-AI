@@ -16,7 +16,7 @@ export default function Index() {
   if (loading) {
     return (
       <View style={styles.center} onLayout={() => void SplashScreen.hideAsync().catch(() => {})}>
-        <Text style={styles.brand}>TrustLensAI</Text>
+        <Text style={styles.brand}>VeriSphere AI</Text>
         <ActivityIndicator size="large" color={colors.teal} style={styles.spin} />
         <Text style={styles.hint}>Starting…</Text>
         <Text style={styles.sub}>
