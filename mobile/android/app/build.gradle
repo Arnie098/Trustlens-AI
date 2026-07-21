@@ -2,12 +2,15 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+// Keep short path if invoked via junction (C:\m) — long Windows paths break Ninja (260 char limit).
+// Do NOT canonicalize; that expands C:\m → long Downloads path and kills release CMake.
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
 // Resolve paths outside the react {} DSL (properties become DirectoryVars inside the block)
 def reactNativePackage = file(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).parentFile
 def codegenPackage = file(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).parentFile
-def entryFilePath = ["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir).text.trim()
+// Relative entry (not absolute): absolute Windows paths get mangled by Metro under path junctions
+def entryFileRelative = ["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "relative"].execute(null, rootDir).text.trim()
 // RN 0.81 ships hermesc under react-native/sdks/hermesc (hermes-compiler package may be absent)
 def hermesCommandPath = new File(reactNativePackage, "sdks/hermesc/%OS-BIN%/hermesc").absolutePath
 
@@ -16,10 +19,13 @@ def hermesCommandPath = new File(reactNativePackage, "sdks/hermesc/%OS-BIN%/herm
  * By default you don't need to apply any configuration, just uncomment the lines you need.
  */
 react {
-    entryFile = file(entryFilePath)
+    // This build.gradle lives in android/app/ — go up two levels to mobile root entry
+    // (relative avoids Metro mangling absolute C:\ paths under the C:\m junction)
+    entryFile = file("../../${entryFileRelative.replace('\\', '/')}")
     reactNativeDir = reactNativePackage
     hermesCommand = hermesCommandPath
     codegenDir = codegenPackage
+    root = file(projectRoot)
 
     enableBundleCompression = (findProperty('android.enableBundleCompression') ?: false).toBoolean()
     // Use Expo CLI to bundle the app, this ensures the Metro config

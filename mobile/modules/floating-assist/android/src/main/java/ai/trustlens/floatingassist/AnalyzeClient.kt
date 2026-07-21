@@ -62,19 +62,19 @@ object AnalyzeClient {
       }
     }
 
-    // Compress → send JPEG bytes straight to Claude (no upload hop, no OCR-primary path).
-    status(AnalyzeLoadStage.PREPARE, "Compressing screenshot for Claude vision…")
+    // Compress → send JPEG bytes straight to the vision model (no upload hop, no OCR-primary path).
+    status(AnalyzeLoadStage.PREPARE, "Compressing screenshot for the Model…")
     val jpeg = compressForUpload(imagePath)
     val b64 = Base64.encodeToString(jpeg, Base64.NO_WRAP)
-    Log.i(TAG, "direct Claude jpeg bytes=${jpeg.size} b64KB=${b64.length / 1024}")
+    Log.i(TAG, "direct vision jpeg bytes=${jpeg.size} b64KB=${b64.length / 1024}")
 
     status(
       AnalyzeLoadStage.UPLOAD,
-      "Sending image (${jpeg.size / 1024} KB) to Claude via server…",
+      "Sending image (${jpeg.size / 1024} KB) to the Model via server…",
     )
 
     // No protocol essay in `text` — that was being analyzed as the "post" when vision failed.
-    // Image bytes go in imageBase64; server prompt tells Claude to read the pixels.
+    // Image bytes go in imageBase64; server prompt tells the model to read the pixels.
     val body =
       JSONObject()
         .put("type", "image")
@@ -85,7 +85,7 @@ object AnalyzeClient {
 
     status(
       AnalyzeLoadStage.VISION,
-      "Claude is looking at your screenshot (often 30s–2 min)…",
+      "The Model is looking at your screen (often 30s–2 min)…",
     )
     val result =
       try {
@@ -94,7 +94,7 @@ object AnalyzeClient {
         throw IllegalStateException(friendlyNetError("Analysis", e), e)
       }
     status(AnalyzeLoadStage.FINISH, "Building your result card…")
-    return result.copy(excerpt = "Claude vision · screenshot")
+    return result.copy(excerpt = "Model vision · screenshot")
   }
 
   private fun friendlyNetError(phase: String, e: Exception): String {

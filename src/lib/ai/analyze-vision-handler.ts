@@ -81,7 +81,7 @@ export async function handleAnalyzeVisionApi(request: Request): Promise<Response
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("[api/analyze/vision]", message);
-    let safe = "Claude vision is temporarily unavailable. Please try again.";
+    let safe = "The Model is temporarily unavailable. Please try again.";
     let fail_path = "claude_vision";
     if (/ANTHROPIC_API_KEY|CLAUDE_API_KEY is not set/i.test(message)) {
       safe =
