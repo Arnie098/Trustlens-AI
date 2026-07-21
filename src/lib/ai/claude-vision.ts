@@ -24,6 +24,8 @@ import {
 import type { AnalysisInput, AnalysisResult } from "./types";
 
 const ANTHROPIC_VERSION = "2023-06-01";
+/** Per-upstream-call abort so a hung freemodel request fails over instead of stalling. */
+const CALL_TIMEOUT_MS = 100_000;
 const DEFAULT_OFFICIAL_BASE = "https://api.anthropic.com";
 /** freemodel Claude Code host (hackathon default). */
 const DEFAULT_FREEMODEL_BASE = "https://api-cc.freemodel.dev";
@@ -202,8 +204,9 @@ function buildClaudeRequestHeaders(
 }
 
 function headerModesFor(endpoint: string): HeaderMode[] {
-  // Try simple first — "third-party client rejected" often means fake CC fingerprint failed.
-  if (isFreemodelEndpoint(endpoint)) return ["simple", "claude_code"];
+  // claude_code first: api-cc rejects simple headers every time in practice, so
+  // leading with simple burned a guaranteed-failed round trip on each request.
+  if (isFreemodelEndpoint(endpoint)) return ["claude_code", "simple"];
   return ["simple"];
 }
 
@@ -251,11 +254,26 @@ async function callClaudeOnce(
     body.temperature = 0.2;
   }
 
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+  // Successful freemodel vision calls run 37–58s; a hung upstream otherwise
+  // stalls until the mobile client's 240s read timeout. Abort and fail over.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), CALL_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+  } catch (e) {
+    if (ctrl.signal.aborted) {
+      throw new Error(`Claude call timed out after ${CALL_TIMEOUT_MS / 1000}s model=${model}`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 
   const raw = await res.text();
   let data: ReturnType<typeof JSON.parse>;
