@@ -47,8 +47,9 @@ services:
         value: "https://api-cc.freemodel.dev"
       - key: CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
         value: "1"
-      # api-cc.freemodel.dev currently supports opus-4-7 (not 4.8 / 4-8)
+      # sonnet-4-6 first: from Render's IP, opus-4-7 hangs past the 100s abort
+      # on api-cc while sonnet answers in ~34s (opus stays in the fallback list).
       - key: CLAUDE_VISION_MODEL
-        value: "claude-opus-4-7"
+        value: "claude-sonnet-4-6"
       - key: ANTHROPIC_MODEL
-        value: "claude-opus-4-7"
+        value: "claude-sonnet-4-6"
